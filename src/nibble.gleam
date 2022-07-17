@@ -16,8 +16,8 @@ import nibble/predicates
 // TYPES -----------------------------------------------------------------------
 
 ///
-pub opaque type Parser(a, e, ctx) {
-    Parser(fn (State(ctx)) -> Step(a, e, ctx))
+pub opaque type Parser(a, ctx) {
+    Parser(fn (State(ctx)) -> Step(a, ctx))
 }
 
 type State(ctx) {
@@ -37,9 +37,9 @@ type State(ctx) {
     )
 }
 
-type Step(a, e, ctx) {
+type Step(a, ctx) {
   Cont(Backtrackable, a, State(ctx))
-  Fail(Backtrackable, Bag(e, ctx))   
+  Fail(Backtrackable, Bag(ctx))   
 }
 
 ///
@@ -59,7 +59,7 @@ type Backtrackable {
 // RUNNING PARSERS -------------------------------------------------------------
 
 ///
-pub fn run (src: String, parser: Parser(a, e, ctx)) -> Result(a, List(DeadEnd(e, ctx))) {
+pub fn run (src: String, parser: Parser(a, ctx)) -> Result(a, List(DeadEnd(ctx))) {
     let graphemes =
         string.to_graphemes(src)
             |> list.index_map(fn (i, grapheme) { #(i, grapheme) })
@@ -76,7 +76,7 @@ pub fn run (src: String, parser: Parser(a, e, ctx)) -> Result(a, List(DeadEnd(e,
     }
 }
 
-fn runwrap (state: State(ctx), parser: Parser(a, e, ctx)) -> Step(a, e, ctx) {
+fn runwrap (state: State(ctx), parser: Parser(a, ctx)) -> Step(a, ctx) {
     let Parser(parse) = parser;
     parse(state)
 }
@@ -97,57 +97,30 @@ fn next (state: State(ctx)) -> #(Option(String), State(ctx)) {
 // CONSTRUCTORS ----------------------------------------------------------------
 
 ///
-pub fn succeed (a: a) -> Parser(a, e, ctx) {
+pub fn succeed (a: a) -> Parser(a, ctx) {
     Parser(fn (state) {
         Cont(Backtrack, a, state)
     })
 }
 
 ///
-pub fn fail (error: e) -> Parser(a, e, ctx) {
+pub fn fail (message: String) -> Parser(a, ctx) {
     Parser(fn (state) {
-        Fail(Backtrack, bag_from_state(state, error))
+        Fail(Backtrack, bag_from_state(state, Custom(message)))
     })
 }
 
 ///
-pub fn lazy (parser: fn () -> Parser(a, e, ctx)) -> Parser(a, e, ctx) {
+pub fn lazy (parser: fn () -> Parser(a, ctx)) -> Parser(a, ctx) {
     Parser(fn (state) {
         runwrap(state, parser())
     })
 }
 
-///
-pub fn from_result (result: Result(a, e)) -> Parser(a, e, ctx) {
-    Parser(fn (state) {
-        case result {
-            Ok(a) ->
-                Cont(Backtrack, a, state)
-            
-            Error(e) ->
-                Fail(Backtrack, bag_from_state(state, e))
-        }
-    })
-}
-
-///
-pub fn from_option (option: Option(a), error: e) -> Parser(a, e, ctx) {
-    Parser(fn (state) {
-        case option {
-            option.Some(a) ->
-                Cont(Backtrack, a, state)
-            
-            option.None ->
-                Fail(Backtrack, bag_from_state(state, error))
-        }
-    })
-}
-
-
 // BACKTRACKING ----------------------------------------------------------------
 
 ///
-pub fn backtrackable (parser: Parser(a, e, ctx)) -> Parser(a, e, ctx) {
+pub fn backtrackable (parser: Parser(a, ctx)) -> Parser(a, ctx) {
     Parser(fn (state) {
         case runwrap(state, parser) {
             Cont(_, a, state) ->
@@ -160,7 +133,7 @@ pub fn backtrackable (parser: Parser(a, e, ctx)) -> Parser(a, e, ctx) {
 }
 
 ///
-pub fn commit (to a: a) -> Parser(a, e, ctx) {
+pub fn commit (to a: a) -> Parser(a, ctx) {
     Parser(fn (state) {
         Cont(Commit, a, state)
     })
@@ -182,7 +155,7 @@ fn should_commit (to_x: Backtrackable, or to_y: Backtrackable) -> Backtrackable 
 // MANIPULATING PARSERS --------------------------------------------------------
 
 ///
-pub fn then (parser: Parser(a, e, ctx), f: fn (a) -> Parser(b, e, ctx)) -> Parser(b, e, ctx) {
+pub fn then (parser: Parser(a, ctx), f: fn (a) -> Parser(b, ctx)) -> Parser(b, ctx) {
     Parser(fn (state) {
         case runwrap(state, parser) {
             Cont(to_a, a, state) ->
@@ -194,20 +167,20 @@ pub fn then (parser: Parser(a, e, ctx), f: fn (a) -> Parser(b, e, ctx)) -> Parse
                         Fail(should_commit(to_a, or: to_b), bag)
                 }
 
-            Fail(p1, bag) ->
-                Fail(p1, bag)
+            Fail(can_backtrack, bag) ->
+                Fail(can_backtrack, bag)
         }
     })
 }
 
 ///
-pub fn map (parser: Parser(a, e, ctx), f: fn (a) -> b) -> Parser(b, e, ctx) {
+pub fn map (parser: Parser(a, ctx), f: fn (a) -> b) -> Parser(b, ctx) {
     then(parser, fn (a) {
         succeed(f(a))
     })
 }
 
-fn map2 (parse_a: Parser(a, e, ctx), parse_b: Parser(b, e, ctx), f: fn (a, b) -> c) -> Parser(c, e, ctx) {
+fn map2 (parse_a: Parser(a, ctx), parse_b: Parser(b, ctx), f: fn (a, b) -> c) -> Parser(c, ctx) {
     then(parse_a, fn (a) {
         map(parse_b, fn (b) {
             f(a, b)
@@ -216,7 +189,7 @@ fn map2 (parse_a: Parser(a, e, ctx), parse_b: Parser(b, e, ctx), f: fn (a, b) ->
 }
 
 ///
-pub fn replace (parser: Parser(a, e, ctx), with b: b) -> Parser(b, e, ctx) {
+pub fn replace (parser: Parser(a, ctx), with b: b) -> Parser(b, ctx) {
     map(parser, fn (_) {
         b
     })
@@ -225,14 +198,14 @@ pub fn replace (parser: Parser(a, e, ctx), with b: b) -> Parser(b, e, ctx) {
 // PIPE-FRIENDLY HELPERS -------------------------------------------------------
 
 ///
-pub fn keep (parse_f: Parser(fn (a) -> b, e, ctx), parse_a: Parser(a, e, ctx)) -> Parser(b, e, ctx) {
+pub fn keep (parse_f: Parser(fn (a) -> b, ctx), parse_a: Parser(a, ctx)) -> Parser(b, ctx) {
     map2(parse_f, parse_a, fn (f, a) {
         f(a)
     })
 }
 
 ///
-pub fn drop (parse_a: Parser(a, e, ctx), parse_x: Parser(x, e, ctx)) -> Parser(a, e, ctx) {
+pub fn drop (parse_a: Parser(a, ctx), parse_x: Parser(x, ctx)) -> Parser(a, ctx) {
     map2(parse_a, parse_x, fn (a, _) {
         a
     })
@@ -241,16 +214,16 @@ pub fn drop (parse_a: Parser(a, e, ctx), parse_x: Parser(x, e, ctx)) -> Parser(a
 // SIMPLE PARSERS --------------------------------------------------------------
 
 ///
-pub fn any (error: fn (String) -> e) -> Parser(String, e, ctx) {
-    take_if(function.constant(True), error)
+pub fn any () -> Parser(String, ctx) {
+    take_if(function.constant(True), "a single grapheme")
 }
 
 ///
-pub fn eof (error: e) -> Parser(Nil, e, ctx) {
+pub fn eof () -> Parser(Nil, ctx) {
     Parser(fn (state) {
         case next(state) {
-            #(option.Some(_), _) ->
-                Fail(Backtrack, bag_from_state(state, error))
+            #(option.Some(str), _) ->
+                Fail(Backtrack, bag_from_state(state, Unexpected(str)))
             
             #(option.None, _) ->
                 Cont(Backtrack, Nil, state)
@@ -261,28 +234,31 @@ pub fn eof (error: e) -> Parser(Nil, e, ctx) {
 // GRAPHEMES AND STRINGS -------------------------------------------------------
 
 ///
-pub fn grapheme (str: String, error: fn (String) -> e) -> Parser(Nil, e, ctx) {
-    take_if(fn (g) { g == str }, error)
+pub fn grapheme (str: String) -> Parser(Nil, ctx) {
+    take_if(fn (g) { g == str }, str)
         |> map(function.constant(Nil))
 }
 
 ///
-pub fn string (str: String, error: fn (String) -> e) -> Parser(Nil, e, ctx) {
+pub fn string (str: String) -> Parser(Nil, ctx) {
     let graphemes = string.to_graphemes(str)
 
     Parser(fn (state) {
         case graphemes {
+            [] ->
+                Fail(Backtrack, bag_from_state(state, BadParser("empty string")))
+
             [ head, ..tail ] -> {
-                let parse_each = list.fold(tail, grapheme(head, error), fn (parse, next) {
-                    parse |> drop(grapheme(next, error))
+                let parse_each = list.fold(tail, grapheme(head), fn (parse, next) {
+                    parse |> drop(grapheme(next))
                 })
 
                 case runwrap(state, parse_each) {
                     Cont(_, _, state) ->
                         Cont(Commit, Nil, state)
                     
-                    Fail(_, _) ->
-                        Fail(Backtrack, bag_from_state(state, error("")))
+                    Fail(_, bag) ->
+                        Fail(Backtrack, bag)
                 }
             }
 
@@ -295,8 +271,8 @@ pub fn string (str: String, error: fn (String) -> e) -> Parser(Nil, e, ctx) {
 // NUMBERS ---------------------------------------------------------------------
 
 ///
-pub fn int (error: fn (String) -> e) -> Parser(Int, e, ctx) {
-    take_if_and_while(predicates.is_digit, error)
+pub fn int () -> Parser(Int, ctx) {
+    take_if_and_while(predicates.is_digit, "a digit")
         // We can make the following assertion because we know our parser will
         // only consume digits, and is guaranteed to have at least one.
         |> map(fn (digits) {
@@ -306,15 +282,15 @@ pub fn int (error: fn (String) -> e) -> Parser(Int, e, ctx) {
 }
 
 ///
-pub fn float (error: fn (String) -> e) -> Parser(Float, e, ctx) {
+pub fn float () -> Parser(Float, ctx) {
     let make_float_string = function.curry2(fn (x, y) {
         string.concat([x, ".", y])
     })
 
     succeed(make_float_string)
-        |> keep(take_if_and_while(predicates.is_digit, error))
-        |> drop(grapheme(".", error))
-        |> keep(take_if_and_while(predicates.is_digit, error))
+        |> keep(take_if_and_while(predicates.is_digit, "a digit"))
+        |> drop(grapheme("."))
+        |> keep(take_if_and_while(predicates.is_digit, "a digit"))
         // We can make the following assertion because we know our parser will
         // only consume digits, and is guaranteed to have at least one.
         |> map(fn (digits) {
@@ -326,13 +302,13 @@ pub fn float (error: fn (String) -> e) -> Parser(Float, e, ctx) {
 // WHITESPACE ------------------------------------------------------------------
 
 ///
-pub fn spaces () -> Parser(Nil, e, ctx) {
+pub fn spaces () -> Parser(Nil, ctx) {
     take_while(fn (g) { g == " "})
         |> map(function.constant(Nil))
 }
 
 ///
-pub fn whitespace () -> Parser(Nil, e, ctx) {
+pub fn whitespace () -> Parser(Nil, ctx) {
     take_while(predicates.is_whitespace)
         |> map(function.constant(Nil))
 }
@@ -340,7 +316,7 @@ pub fn whitespace () -> Parser(Nil, e, ctx) {
 // BRANCHING AND LOOPING -------------------------------------------------------
 
 ///
-pub fn one_of (parsers: List(Parser(a, e, ctx))) -> Parser(a, e, ctx) {
+pub fn one_of (parsers: List(Parser(a, ctx))) -> Parser(a, ctx) {
     Parser(fn (state) {
         let init = Fail(Backtrack, Empty)
 
@@ -362,14 +338,14 @@ pub fn one_of (parsers: List(Parser(a, e, ctx))) -> Parser(a, e, ctx) {
 }
 
 ///
-pub fn many (parser: Parser(a, e, ctx), separator: Parser(x, e, ctx)) -> Parser(List(a), e, ctx) {
+pub fn many (parser: Parser(a, ctx), separator: Parser(x, ctx)) -> Parser(List(a), ctx) {
     one_of([
         parser |> then(more(_, parser, separator)),
         succeed([])
     ])
 }
 
-fn more (x: a, parser: Parser(a, e, ctx), separator: Parser(x, e, ctx)) -> Parser(List(a), e, ctx) {
+fn more (x: a, parser: Parser(a, ctx), separator: Parser(x, ctx)) -> Parser(List(a), ctx) {
     one_of([
         succeed(list.prepend(_, x))
             |> drop(separator)
@@ -382,7 +358,7 @@ fn more (x: a, parser: Parser(a, e, ctx), separator: Parser(x, e, ctx)) -> Parse
 // PREDICATES ------------------------------------------------------------------
 
 ///
-pub fn take_if (predicate: fn (String) -> Bool, error: fn (String) -> e) -> Parser(String, e, ctx) {
+pub fn take_if (predicate: fn (String) -> Bool, expecting: String) -> Parser(String, ctx) {
     Parser(fn (state) {
         let #(str, next_state) = next(state)
         let should_take = str |> option.map(predicate) |> option.unwrap(False)
@@ -393,13 +369,13 @@ pub fn take_if (predicate: fn (String) -> Bool, error: fn (String) -> e) -> Pars
                 Cont(Commit, str, next_state)
             
             False ->
-                Fail(Backtrack, bag_from_state(state, error(str)))
+                Fail(Backtrack, bag_from_state(state, Expected(expecting, got: str)))
         }
     })
 }
 
 ///
-pub fn take_while (predicate: fn (String) -> Bool) -> Parser(String, e, ctx) {
+pub fn take_while (predicate: fn (String) -> Bool) -> Parser(String, ctx) {
     Parser(fn (state) {
         let #(str, next_state) = next(state)
         let should_take = str |> option.map(predicate) |> option.unwrap(False)
@@ -416,39 +392,47 @@ pub fn take_while (predicate: fn (String) -> Bool) -> Parser(String, e, ctx) {
 }
 
 ///
-pub fn take_if_and_while (predicate: fn (String) -> Bool, error: fn (String) -> e) -> Parser(String, e, ctx) {
-    map2(take_if(predicate, error), take_while(predicate), string.append)
+pub fn take_if_and_while (predicate: fn (String) -> Bool, expecting: String) -> Parser(String, ctx) {
+    map2(take_if(predicate, expecting), take_while(predicate), string.append)
 
 }
 
 ///
-pub fn take_until (predicate: fn (String) -> Bool) -> Parser(String, e, ctx) {
+pub fn take_until (predicate: fn (String) -> Bool) -> Parser(String, ctx) {
     take_while(function.compose(predicate, bool.negate))
 }
 
 // ERRORS ----------------------------------------------------------------------
 
+pub type Error {
+    BadParser(String)
+    Custom(String)
+    EndOfInput
+    Expected(String, got: String)
+    Unexpected(String)
+}
+
 ///
-pub type DeadEnd(e, ctx) {
+pub type DeadEnd(ctx) {
     DeadEnd(
         row : Int,
         col : Int,
-        problem : e,
+        problem : Error,
         context : List(Located(ctx))
     )
 }
 
-type Bag(e, ctx) {
+type Bag(ctx) {
     Empty
-    Cons(Bag(e, ctx), DeadEnd(e, ctx))
-    Append(Bag(e, ctx), Bag(e, ctx))
+    Cons(Bag(ctx), DeadEnd(ctx))
+    Append(Bag(ctx), Bag(ctx))
 }
 
-fn bag_from_state (state: State(ctx), problem: e) -> Bag(e, ctx) {
+fn bag_from_state (state: State(ctx), problem: Error) -> Bag(ctx) {
     Cons(Empty, DeadEnd(state.row, state.col, problem, state.context))
 }
 
-fn to_deadends (bag: Bag(e, ctx), acc: List(DeadEnd(e, ctx))) -> List (DeadEnd(e, ctx)) {
+fn to_deadends (bag: Bag(ctx), acc: List(DeadEnd(ctx))) -> List (DeadEnd(ctx)) {
     case bag {
         Empty ->
             acc
@@ -464,7 +448,7 @@ fn to_deadends (bag: Bag(e, ctx), acc: List(DeadEnd(e, ctx))) -> List (DeadEnd(e
     }
 }
 
-fn add_bag_to_step (step: Step(a, e, ctx), left: Bag(e, ctx)) -> Step(a, e, ctx) {
+fn add_bag_to_step (step: Step(a, ctx), left: Bag(ctx)) -> Step(a, ctx) {
     case step {
         Cont(can_backtrack, a, state) ->
             Cont(can_backtrack, a, state)
@@ -477,7 +461,7 @@ fn add_bag_to_step (step: Step(a, e, ctx), left: Bag(e, ctx)) -> Step(a, e, ctx)
 // CONTEXT ---------------------------------------------------------------------
 
 ///
-pub fn in (parser: Parser(a, e, ctx), context: ctx) -> Parser(a, e, ctx) {
+pub fn in (parser: Parser(a, ctx), context: ctx) -> Parser(a, ctx) {
     Parser(fn (state) {
         case runwrap(push_context(state, context), parser) {
             Cont(can_backtrack, a, state) ->
@@ -505,7 +489,7 @@ fn pop_context (state: State(ctx)) -> State(ctx) {
 }
 
 /// Run the given parser and then inspect it's state. 
-pub fn inspect (parser: Parser(a, e, ctx), message: String) -> Parser(a, e, ctx) {
+pub fn inspect (parser: Parser(a, ctx), message: String) -> Parser(a, ctx) {
     Parser(fn (state) {
         io.print(message)
         io.println(": ")
