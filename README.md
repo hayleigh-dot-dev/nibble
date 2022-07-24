@@ -7,10 +7,32 @@ A string parsing library heavily inspired by [`elm/parser`](https://github.com/e
 
 ## Quick start
 
-```sh
-gleam run   # Run the project
-gleam test  # Run the tests
-gleam shell # Run an Erlang shell
+```gleam
+import gleam/function
+import nibble.{ Parser }
+
+type Point {
+    Point(x: Int, y: Int)
+}
+
+pub fn main () {
+    let parser = 
+        nibble.succeed(function.curry2)
+            |> nibble.drop(nibble.grapheme("("))
+            |> nibble.drop(nibble.spaces())
+            |> nibble.keep(nibble.int())
+            |> nibble.drop(nibble.spaces())
+            |> nibble.drop(nibble.grapheme(","))
+            |> nibble.drop(nibble.spaces())
+            |> nibble.keep(nibble.int())
+            |> nibble.drop(nibble.spaces())
+            |> nibble.drop(nibble.grapheme(")"))
+
+    assert Ok(point) = nibble.run("(1, 2)", parser)
+
+    point.x //=> 1
+    point.y //=> 2
+}
 ```
 
 ## Installation
