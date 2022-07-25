@@ -355,6 +355,30 @@ fn more (x: a, parser: Parser(a, ctx), separator: Parser(x, ctx)) -> Parser(List
     ])
 }
 
+pub type Loop(a, state) {
+    Continue(state)
+    Break(a)
+}
+
+pub fn loop (init: state, step: fn (state) -> Parser(Loop(a, state), ctx)) -> Parser(a, ctx) {
+    Parser(fn(state) {
+        loop_help(step, Backtrack, init, state)
+    })
+}
+
+fn loop_help (f, commit, loop_state, state) {
+    case runwrap(state, f(loop_state)) {
+        Cont(can_backtrack, Continue(next_loop_state), next_state) ->
+            loop_help(f, should_commit(commit, can_backtrack), next_loop_state, next_state)
+        
+        Cont(can_backtrack, Break(result), next_state) ->
+            Cont(should_commit(commit, can_backtrack), result, next_state)
+
+        Fail(can_backtrack, bag) ->
+            Fail(should_commit(commit, can_backtrack), bag)
+    }
+}
+
 // PREDICATES ------------------------------------------------------------------
 
 ///
