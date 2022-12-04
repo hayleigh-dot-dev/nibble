@@ -239,8 +239,6 @@ pub fn string(str: String) -> Parser(Nil, ctx) {
           Fail(_, bag) -> Fail(Backtrack, bag)
         }
       }
-
-      [] -> Cont(Commit, Nil, state)
     }
   })
 }
