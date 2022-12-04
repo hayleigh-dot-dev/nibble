@@ -9,7 +9,7 @@ description = "A string parsing library heavily inspired by elm/parser."
 repository = { type = "github", user = "hayleigh-dot-dev", repo = "gleam-nibble" }
 
 [dependencies]
-gleam_stdlib = "~> 0.21"
+gleam_stdlib = "~> 0.25"
 
 [dev-dependencies]
 gleeunit = "~> 0.6"
