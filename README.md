@@ -17,7 +17,7 @@ type Point {
 
 pub fn main () {
     let parser = 
-        nibble.succeed(function.curry2)
+        nibble.succeed(function.curry2(Point))
             |> nibble.drop(nibble.grapheme("("))
             |> nibble.drop(nibble.spaces())
             |> nibble.keep(nibble.int())
