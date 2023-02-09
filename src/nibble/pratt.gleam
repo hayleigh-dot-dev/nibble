@@ -25,7 +25,7 @@ pub opaque type Operator(a, ctx) {
 pub fn expression(
     one_of first: List(fn (Config(a, ctx)) -> Parser(a, ctx)),
     and_then_one_of then: List(Operator(a, ctx)),
-    spaces: Parser(Nil, ctx)
+    dropping spaces: Parser(Nil, ctx)
 ) -> Parser(a, ctx) {
     let config = Config(first, then, spaces)
     sub_expression(config, 0)
