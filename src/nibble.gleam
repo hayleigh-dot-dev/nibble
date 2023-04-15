@@ -251,7 +251,7 @@ pub fn int() -> Parser(Int, ctx) {
   // We can make the following assertion because we know our parser will
   // only consume digits, and is guaranteed to have at least one.
   |> map(fn(digits) {
-    assert Ok(int) = int.parse(digits)
+    let assert Ok(int) = int.parse(digits)
     int
   })
 }
@@ -268,7 +268,7 @@ pub fn float() -> Parser(Float, ctx) {
   // We can make the following assertion because we know our parser will
   // only consume digits, and is guaranteed to have at least one.
   |> map(fn(digits) {
-    assert Ok(float) = float.parse(digits)
+    let assert Ok(float) = float.parse(digits)
     float
   })
 }
