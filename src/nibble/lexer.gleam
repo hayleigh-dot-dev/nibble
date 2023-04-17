@@ -1,12 +1,14 @@
 // IMPORTS ---------------------------------------------------------------------
+
+import gleam/float
+import gleam/int
+import gleam/io
 import gleam/list
 import gleam/option.{None, Option, Some}
 import gleam/regex
+import gleam/result
 import gleam/set.{Set}
 import gleam/string
-import gleam/int
-import gleam/float
-import gleam/io
 
 // TYPES -----------------------------------------------------------------------
 
@@ -31,7 +33,7 @@ pub opaque type Matcher(a, ctx) {
 pub type Match(a, ctx) {
   Keep(a, ctx)
   Drop(ctx)
-  NoMatch
+  NoMatch(ctx)
 }
 
 ///
@@ -82,7 +84,7 @@ pub fn simple_matcher(
   case f(lexeme, lookahead) {
     Ok(Some(value)) -> Keep(value, ctx)
     Ok(None) -> Drop(ctx)
-    Error(_) -> NoMatch
+    Error(_) -> NoMatch(ctx)
   }
 }
 
@@ -96,7 +98,19 @@ pub fn custom_matcher(
   case f(ctx, lexeme, lookahead) {
     Ok(#(Some(value), ctx)) -> Keep(value, ctx)
     Ok(#(None, ctx)) -> Drop(ctx)
-    Error(_) -> NoMatch
+    Error(_) -> NoMatch(ctx)
+  }
+}
+
+///
+///
+pub fn ignore(matcher: Matcher(a, ctx)) -> Matcher(b, ctx) {
+  use ctx, lexeme, lookahead <- Matcher
+
+  case matcher.run(ctx, lexeme, lookahead) {
+    Keep(_, ctx) -> Drop(ctx)
+    Drop(ctx) -> Drop(ctx)
+    NoMatch(ctx) -> NoMatch(ctx)
   }
 }
 
@@ -107,7 +121,7 @@ pub fn token(str: String, value: a) -> Matcher(a, ctx) {
 
   case lexeme == str {
     True -> Keep(value, ctx)
-    False -> NoMatch
+    False -> NoMatch(ctx)
   }
 }
 
@@ -120,7 +134,7 @@ pub fn int(to_value: fn(Int) -> a) -> Matcher(a, ctx) {
   use ctx, lexeme, lookahead <- Matcher
 
   case !regex.check(digit, lookahead) && regex.check(integer, lexeme) {
-    False -> NoMatch
+    False -> NoMatch(ctx)
     True -> {
       let assert Ok(num) = int.parse(lexeme)
       Keep(to_value(num), ctx)
@@ -140,14 +154,34 @@ pub fn float(to_value: fn(Float) -> a) -> Matcher(a, ctx) {
   let is_float = !regex.check(digit, lookahead) && regex.check(number, lexeme)
 
   case lexeme {
-    "." if is_int -> NoMatch
+    "." if is_int -> NoMatch(ctx)
 
     _ if is_float -> {
       let assert Ok(num) = float.parse(lexeme)
       Keep(to_value(num), ctx)
     }
 
-    _ -> NoMatch
+    _ -> NoMatch(ctx)
+  }
+}
+
+///
+///
+pub fn string(char: String, to_value: fn(String) -> a) -> Matcher(a, ctx) {
+  let assert Ok(is_string) =
+    regex.from_string(
+      "^" <> char <> "([^" <> char <> "\\\\]|\\\\[\\s\\S])*" <> char <> "$",
+    )
+  use ctx, lexeme, _ <- Matcher
+
+  case regex.check(is_string, lexeme) {
+    True ->
+      lexeme
+      |> string.drop_left(1)
+      |> string.drop_right(1)
+      |> to_value
+      |> Keep(ctx)
+    False -> NoMatch(ctx)
   }
 }
 
@@ -165,12 +199,48 @@ pub fn identifier(
   use ctx, lexeme, lookahead <- Matcher
 
   case !regex.check(inner, lookahead) && regex.check(ident, lexeme) {
-    False -> NoMatch
+    False -> NoMatch(ctx)
     True ->
       case set.contains(reserved, lexeme) {
-        True -> NoMatch
+        True -> NoMatch(ctx)
         False -> Keep(to_value(lexeme), ctx)
       }
+  }
+}
+
+///
+///
+pub fn try_identifier(
+  start: String,
+  inner: String,
+  reserved: Set(String),
+  to_value: fn(String) -> a,
+) -> Result(Matcher(a, ctx), regex.CompileError) {
+  use ident <- result.then(regex.from_string("^" <> start <> inner <> "+$"))
+  use inner <- result.map(regex.from_string(inner))
+
+  use ctx, lexeme, lookahead <- Matcher
+
+  case !regex.check(inner, lookahead) && regex.check(ident, lexeme) {
+    False -> NoMatch(ctx)
+    True ->
+      case set.contains(reserved, lexeme) {
+        True -> NoMatch(ctx)
+        False -> Keep(to_value(lexeme), ctx)
+      }
+  }
+}
+
+///
+///
+pub fn whitespace(token: a) -> Matcher(a, ctx) {
+  let assert Ok(whitespace) = regex.from_string("^\\s+$")
+
+  use ctx, lexeme, _ <- Matcher
+
+  case regex.check(whitespace, lexeme) {
+    True -> Keep(token, ctx)
+    False -> NoMatch(ctx)
   }
 }
 
@@ -189,7 +259,7 @@ pub fn run(
 
 ///
 ///
-pub fn run_with_ctx(
+pub fn run_custom(
   source: String,
   ctx: ctx,
   lexer: Lexer(a, ctx),
@@ -218,7 +288,7 @@ fn do_run(
     // at this point something went wrong.
     [], #(start_row, start_col, lexeme) ->
       case do_match(context, lexeme, "", matchers) {
-        NoMatch -> Error(NoMatchFound(start_row, start_col, lexeme))
+        NoMatch(_) -> Error(NoMatchFound(start_row, start_col, lexeme))
         Drop(_) -> Ok(list.reverse(state.tokens))
         Keep(value, _) -> {
           let span = Span(start_row, start_col, state.row, state.col)
@@ -238,7 +308,7 @@ fn do_run(
 
       case do_match(context, lexeme, lookahead, matchers) {
         Keep(value, ctx) -> {
-          let span = Span(start_row, start_col, row, col)
+          let span = Span(start_row, start_col, state.row, state.col)
           let token = Token(span, lexeme, value)
 
           do_run(
@@ -247,7 +317,7 @@ fn do_run(
             State(
               source: rest,
               tokens: [token, ..state.tokens],
-              current: #(row, col, lookahead),
+              current: #(state.row, state.col, lookahead),
               row: row,
               col: col,
             ),
@@ -265,16 +335,16 @@ fn do_run(
             State(
               source: rest,
               tokens: state.tokens,
-              current: #(row, col, lookahead),
+              current: #(state.row, state.col, lookahead),
               row: row,
               col: col,
             ),
           )
 
-        NoMatch ->
+        NoMatch(ctx) ->
           do_run(
             lexer,
-            context,
+            ctx,
             State(
               source: rest,
               tokens: state.tokens,
@@ -294,12 +364,12 @@ fn do_match(
   lookahead: String,
   matchers: List(Matcher(a, ctx)),
 ) -> Match(a, ctx) {
-  use _, matcher <- list.fold_until(matchers, NoMatch)
+  use _, matcher <- list.fold_until(matchers, NoMatch(ctx))
 
   case matcher.run(ctx, str, lookahead) {
     Keep(_, _) as match -> list.Stop(match)
     Drop(_) as match -> list.Stop(match)
-    NoMatch -> list.Continue(NoMatch)
+    NoMatch(_) as no_match -> list.Continue(no_match)
   }
 }
 

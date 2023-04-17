@@ -5,7 +5,11 @@ import gleam/set
 type Tok {
   I(Int)
   F(Float)
+  S(String)
   Id(String)
+  If
+  Then
+  Else
 }
 
 pub fn int_lexer_test() {
@@ -47,6 +51,29 @@ pub fn float_lexer_test() {
   |> should.equal(expected)
 }
 
+pub fn string_lexer_test() {
+  let input = "'hello'"
+  let expected = Ok([Token(Span(1, 1, 1, 8), "'hello'", S("hello"))])
+
+  lexer.simple([lexer.string("'", S)])
+  |> lexer.run(input, _)
+  |> should.equal(expected)
+
+  let input = "'And Hayleigh said, \\'wow, this is a great string\\''"
+  let expected =
+    Ok([
+      Token(
+        Span(1, 1, 1, 53),
+        "'And Hayleigh said, \\'wow, this is a great string\\''",
+        S("And Hayleigh said, \\'wow, this is a great string\\'"),
+      ),
+    ])
+
+  lexer.simple([lexer.string("'", S)])
+  |> lexer.run(input, _)
+  |> should.equal(expected)
+}
+
 pub fn identifier_lexer_test() {
   let reserved = set.from_list(["let", "if", "else"])
 
@@ -61,6 +88,32 @@ pub fn identifier_lexer_test() {
   let expected = Ok([Token(Span(1, 1, 1, 7), "letter", Id("letter"))])
 
   lexer.simple([lexer.identifier("[a-z]", "[a-zA-Z0-9_]", reserved, Id)])
+  |> lexer.run(input, _)
+  |> should.equal(expected)
+}
+
+pub fn full_test() {
+  let reserved = set.from_list(["if", "then", "else"])
+
+  let input = "if wibble then w0BBL3 else 123.456"
+  let expected =
+    Ok([
+      Token(Span(1, 1, 1, 3), "if", If),
+      Token(Span(1, 4, 1, 10), "wibble", Id("wibble")),
+      Token(Span(1, 11, 1, 15), "then", Then),
+      Token(Span(1, 16, 1, 22), "w0BBL3", Id("w0BBL3")),
+      Token(Span(1, 23, 1, 27), "else", Else),
+      Token(Span(1, 28, 1, 35), "123.456", F(123.456)),
+    ])
+
+  lexer.simple([
+    lexer.ignore(lexer.whitespace(Nil)),
+    lexer.token("if", If),
+    lexer.token("then", Then),
+    lexer.token("else", Else),
+    lexer.identifier("[a-z]", "[a-zA-Z0-9_]", reserved, Id),
+    lexer.float(F),
+  ])
   |> lexer.run(input, _)
   |> should.equal(expected)
 }
