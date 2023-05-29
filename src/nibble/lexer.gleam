@@ -2,9 +2,7 @@
 
 import gleam/float
 import gleam/int
-import gleam/io
 import gleam/list
-import gleam/option.{None, Option, Some}
 import gleam/regex
 import gleam/result
 import gleam/set.{Set}
@@ -14,8 +12,15 @@ import gleam/string
 
 ///
 ///
-pub type Span {
-  Span(row_start: Int, col_start: Int, row_end: Int, col_end: Int)
+pub opaque type Matcher(a, mode) {
+  Matcher(run: fn(mode, String, String) -> Match(a, mode))
+}
+
+pub type Match(a, mode) {
+  Keep(a, mode)
+  Skip
+  Drop(mode)
+  NoMatch
 }
 
 ///
@@ -26,14 +31,8 @@ pub type Token(a) {
 
 ///
 ///
-pub opaque type Matcher(a, ctx) {
-  Matcher(run: fn(ctx, String, String) -> Match(a, ctx))
-}
-
-pub type Match(a, ctx) {
-  Keep(a, ctx)
-  Drop(ctx)
-  NoMatch(ctx)
+pub type Span {
+  Span(row_start: Int, col_start: Int, row_end: Int, col_end: Int)
 }
 
 ///
@@ -44,8 +43,8 @@ pub type Error {
 
 ///
 ///
-pub opaque type Lexer(a, ctx) {
-  Lexer(matchers: fn(ctx) -> List(Matcher(a, ctx)))
+pub opaque type Lexer(a, mode) {
+  Lexer(matchers: fn(mode) -> List(Matcher(a, mode)))
 }
 
 type State(a) {
@@ -68,111 +67,257 @@ pub fn simple(matchers: List(Matcher(a, Nil))) -> Lexer(a, Nil) {
 
 ///
 ///
-pub fn custom(matchers: fn(ctx) -> List(Matcher(a, ctx))) -> Lexer(a, ctx) {
-  Lexer(fn(ctx) { matchers(ctx) })
+pub fn custom(matchers: fn(mode) -> List(Matcher(a, mode))) -> Lexer(a, mode) {
+  Lexer(fn(mode) { matchers(mode) })
 }
 
 // MATCHER CONSTRUCTORS --------------------------------------------------------
 
 ///
 ///
-pub fn simple_matcher(
-  f: fn(String, String) -> Result(Option(a), Nil),
-) -> Matcher(a, ctx) {
-  use ctx, lexeme, lookahead <- Matcher
+pub fn keep(f: fn(String, String) -> Result(a, Nil)) -> Matcher(a, mode) {
+  use mode, lexeme, lookahead <- Matcher
+
+  f(lexeme, lookahead)
+  |> result.map(Keep(_, mode))
+  |> result.unwrap(NoMatch)
+}
+
+///
+///
+pub fn drop(f: fn(String, String) -> Bool) -> Matcher(a, mode) {
+  use mode, lexeme, lookahead <- Matcher
 
   case f(lexeme, lookahead) {
-    Ok(Some(value)) -> Keep(value, ctx)
-    Ok(None) -> Drop(ctx)
-    Error(_) -> NoMatch(ctx)
+    True -> Drop(mode)
+    False -> NoMatch
+  }
+}
+
+///
+///
+pub fn skip(matcher: Matcher(a, mode)) -> Matcher(b, mode) {
+  use mode, lexeme, lookahead <- Matcher
+
+  case matcher.run(mode, lexeme, lookahead) {
+    Keep(_, _) -> Skip
+    Skip -> Skip
+    Drop(_) -> Skip
+    NoMatch -> NoMatch
+  }
+}
+
+///
+///
+pub fn map(matcher: Matcher(a, mode), f: fn(a) -> b) -> Matcher(b, mode) {
+  use mode, lexeme, lookahead <- Matcher
+
+  case matcher.run(mode, lexeme, lookahead) {
+    Keep(value, mode) -> Keep(f(value), mode)
+    Skip -> Skip
+    Drop(mode) -> Drop(mode)
+    NoMatch -> NoMatch
   }
 }
 
 ///
 ///
 pub fn custom_matcher(
-  f: fn(ctx, String, String) -> Result(#(Option(a), ctx), Nil),
-) -> Matcher(a, ctx) {
-  use ctx, lexeme, lookahead <- Matcher
+  f: fn(mode, String, String) -> Match(a, mode),
+) -> Matcher(a, mode) {
+  Matcher(f)
+}
 
-  case f(ctx, lexeme, lookahead) {
-    Ok(#(Some(value), ctx)) -> Keep(value, ctx)
-    Ok(#(None, ctx)) -> Drop(ctx)
-    Error(_) -> NoMatch(ctx)
+///
+///
+pub fn transition(
+  matcher: Matcher(a, mode),
+  f: fn(mode) -> mode,
+) -> Matcher(a, mode) {
+  use mode, lexeme, lookahead <- Matcher
+
+  case matcher.run(mode, lexeme, lookahead) {
+    Keep(value, mode) -> Keep(value, f(mode))
+    Skip -> Skip
+    Drop(mode) -> Drop(f(mode))
+    NoMatch -> NoMatch
   }
 }
 
 ///
 ///
-pub fn ignore(matcher: Matcher(a, ctx)) -> Matcher(b, ctx) {
-  use ctx, lexeme, lookahead <- Matcher
+pub fn ignore(matcher: Matcher(a, mode)) -> Matcher(b, mode) {
+  use mode, lexeme, lookahead <- Matcher
 
-  case matcher.run(ctx, lexeme, lookahead) {
-    Keep(_, ctx) -> Drop(ctx)
-    Drop(ctx) -> Drop(ctx)
-    NoMatch(ctx) -> NoMatch(ctx)
+  case matcher.run(mode, lexeme, lookahead) {
+    Keep(_, mode) -> Drop(mode)
+    Skip -> Skip
+    Drop(mode) -> Drop(mode)
+    NoMatch -> NoMatch
   }
 }
 
+// COMMON MATCHERS -------------------------------------------------------------
+
 ///
 ///
-pub fn token(str: String, value: a) -> Matcher(a, ctx) {
-  use ctx, lexeme, _ <- Matcher
+pub fn token(str: String, value: a) -> Matcher(a, mode) {
+  use mode, lexeme, _ <- Matcher
 
   case lexeme == str {
-    True -> Keep(value, ctx)
-    False -> NoMatch(ctx)
+    True -> Keep(value, mode)
+    False -> NoMatch
   }
 }
 
 ///
 ///
-pub fn int(to_value: fn(Int) -> a) -> Matcher(a, ctx) {
-  let assert Ok(digit) = regex.from_string("[0-9]")
-  let assert Ok(integer) = regex.from_string("^[0-9]+$")
+pub fn symbol(str: String, breaker: String, value: a) -> Matcher(a, mode) {
+  let assert Ok(break) = regex.from_string(breaker)
 
-  use ctx, lexeme, lookahead <- Matcher
+  use mode, lexeme, lookahead <- Matcher
+
+  case lexeme == str && { lookahead == "" || regex.check(break, lookahead) } {
+    True -> Keep(value, mode)
+    False -> NoMatch
+  }
+}
+
+///
+///
+pub fn keyword(str: String, breaker: String, value: a) -> Matcher(a, mode) {
+  let assert Ok(break) = regex.from_string(breaker)
+
+  use mode, lexeme, lookahead <- Matcher
+
+  case lexeme == str && { lookahead == "" || regex.check(break, lookahead) } {
+    True -> Keep(value, mode)
+    False -> NoMatch
+  }
+}
+
+///
+///
+pub fn int(to_value: fn(Int) -> a) -> Matcher(a, mode) {
+  int_with_separator("", to_value)
+}
+
+///
+///
+pub fn int_with_separator(
+  separator: String,
+  to_value: fn(Int) -> a,
+) -> Matcher(a, mode) {
+  let assert Ok(digit) = regex.from_string("[0-9" <> separator <> "]")
+  let assert Ok(integer) = regex.from_string("^-*[0-9" <> separator <> "]+$")
+
+  use mode, lexeme, lookahead <- Matcher
 
   case !regex.check(digit, lookahead) && regex.check(integer, lexeme) {
-    False -> NoMatch(ctx)
+    False -> NoMatch
     True -> {
-      let assert Ok(num) = int.parse(lexeme)
-      Keep(to_value(num), ctx)
+      let assert Ok(num) =
+        lexeme
+        |> string.replace(separator, "")
+        |> int.parse
+      Keep(to_value(num), mode)
     }
   }
 }
 
 ///
 ///
-pub fn float(to_value: fn(Float) -> a) -> Matcher(a, ctx) {
-  let assert Ok(digit) = regex.from_string("[0-9]")
-  let assert Ok(integer) = regex.from_string("^[0-9]+$")
-  let assert Ok(number) = regex.from_string("^[0-9]+\\.[0-9]+$")
+pub fn float(to_value: fn(Float) -> a) -> Matcher(a, mode) {
+  float_with_separator("", to_value)
+}
 
-  use ctx, lexeme, lookahead <- Matcher
+///
+///
+pub fn float_with_separator(
+  separator: String,
+  to_value: fn(Float) -> a,
+) -> Matcher(a, mode) {
+  let assert Ok(digit) = regex.from_string("[0-9" <> separator <> "]")
+  let assert Ok(integer) = regex.from_string("^-*[0-9" <> separator <> "]+$")
+  let assert Ok(number) =
+    regex.from_string(
+      "^-*[0-9" <> separator <> "]+\\.[0-9" <> separator <> "]+$",
+    )
+
+  use mode, lexeme, lookahead <- Matcher
   let is_int = !regex.check(digit, lookahead) && regex.check(integer, lexeme)
   let is_float = !regex.check(digit, lookahead) && regex.check(number, lexeme)
 
   case lexeme {
-    "." if is_int -> NoMatch(ctx)
+    "." if is_int -> NoMatch
 
     _ if is_float -> {
-      let assert Ok(num) = float.parse(lexeme)
-      Keep(to_value(num), ctx)
+      let assert Ok(num) =
+        lexeme
+        |> string.replace(separator, "")
+        |> float.parse
+      Keep(to_value(num), mode)
     }
 
-    _ -> NoMatch(ctx)
+    _ -> NoMatch
+  }
+}
+
+pub fn number(
+  from_int: fn(Int) -> a,
+  from_float: fn(Float) -> a,
+) -> Matcher(a, mode) {
+  number_with_separator("", from_int, from_float)
+}
+
+pub fn number_with_separator(
+  separator: String,
+  from_int: fn(Int) -> a,
+  from_float: fn(Float) -> a,
+) -> Matcher(a, mode) {
+  let assert Ok(digit) = regex.from_string("[0-9" <> separator <> "]")
+  let assert Ok(integer) = regex.from_string("^-*[0-9" <> separator <> "]+$")
+  let assert Ok(number) =
+    regex.from_string(
+      "^-*[0-9" <> separator <> "]+\\.[0-9" <> separator <> "]+$",
+    )
+
+  use mode, lexeme, lookahead <- Matcher
+  let is_int = !regex.check(digit, lookahead) && regex.check(integer, lexeme)
+  let is_float = !regex.check(digit, lookahead) && regex.check(number, lexeme)
+
+  case lexeme, lookahead {
+    ".", _ if is_int -> NoMatch
+    _, "." if is_int -> NoMatch
+
+    _, _ if is_int -> {
+      let assert Ok(num) =
+        lexeme
+        |> string.replace(separator, "")
+        |> int.parse
+      Keep(from_int(num), mode)
+    }
+
+    _, _ if is_float -> {
+      let assert Ok(num) =
+        lexeme
+        |> string.replace(separator, "")
+        |> float.parse
+      Keep(from_float(num), mode)
+    }
+
+    _, _ -> NoMatch
   }
 }
 
 ///
 ///
-pub fn string(char: String, to_value: fn(String) -> a) -> Matcher(a, ctx) {
+pub fn string(char: String, to_value: fn(String) -> a) -> Matcher(a, mode) {
   let assert Ok(is_string) =
     regex.from_string(
       "^" <> char <> "([^" <> char <> "\\\\]|\\\\[\\s\\S])*" <> char <> "$",
     )
-  use ctx, lexeme, _ <- Matcher
+  use mode, lexeme, _ <- Matcher
 
   case regex.check(is_string, lexeme) {
     True ->
@@ -180,8 +325,8 @@ pub fn string(char: String, to_value: fn(String) -> a) -> Matcher(a, ctx) {
       |> string.drop_left(1)
       |> string.drop_right(1)
       |> to_value
-      |> Keep(ctx)
-    False -> NoMatch(ctx)
+      |> Keep(mode)
+    False -> NoMatch
   }
 }
 
@@ -192,19 +337,20 @@ pub fn identifier(
   inner: String,
   reserved: Set(String),
   to_value: fn(String) -> a,
-) -> Matcher(a, ctx) {
-  let assert Ok(ident) = regex.from_string("^" <> start <> inner <> "+$")
+) -> Matcher(a, mode) {
+  let assert Ok(ident) = regex.from_string("^" <> start <> inner <> "*$")
   let assert Ok(inner) = regex.from_string(inner)
 
-  use ctx, lexeme, lookahead <- Matcher
+  use mode, lexeme, lookahead <- Matcher
 
-  case !regex.check(inner, lookahead) && regex.check(ident, lexeme) {
-    False -> NoMatch(ctx)
-    True ->
+  case regex.check(inner, lookahead), regex.check(ident, lexeme) {
+    True, True -> Skip
+    False, True ->
       case set.contains(reserved, lexeme) {
-        True -> NoMatch(ctx)
-        False -> Keep(to_value(lexeme), ctx)
+        True -> NoMatch
+        False -> Keep(to_value(lexeme), mode)
       }
+    _, _ -> NoMatch
   }
 }
 
@@ -215,32 +361,42 @@ pub fn try_identifier(
   inner: String,
   reserved: Set(String),
   to_value: fn(String) -> a,
-) -> Result(Matcher(a, ctx), regex.CompileError) {
-  use ident <- result.then(regex.from_string("^" <> start <> inner <> "+$"))
+) -> Result(Matcher(a, mode), regex.CompileError) {
+  use ident <- result.then(regex.from_string("^" <> start <> inner <> "*$"))
   use inner <- result.map(regex.from_string(inner))
 
-  use ctx, lexeme, lookahead <- Matcher
+  use mode, lexeme, lookahead <- Matcher
 
-  case !regex.check(inner, lookahead) && regex.check(ident, lexeme) {
-    False -> NoMatch(ctx)
-    True ->
+  case regex.check(inner, lookahead), regex.check(ident, lexeme) {
+    True, True -> Skip
+    False, True ->
       case set.contains(reserved, lexeme) {
-        True -> NoMatch(ctx)
-        False -> Keep(to_value(lexeme), ctx)
+        True -> NoMatch
+        False -> Keep(to_value(lexeme), mode)
       }
+    _, _ -> NoMatch
   }
 }
 
 ///
 ///
-pub fn whitespace(token: a) -> Matcher(a, ctx) {
+pub fn variable(
+  reserved: Set(String),
+  to_value: fn(String) -> a,
+) -> Matcher(a, mode) {
+  identifier("[a-z]", "[a-zA-Z0-9_]", reserved, to_value)
+}
+
+///
+///
+pub fn whitespace(token: a) -> Matcher(a, mode) {
   let assert Ok(whitespace) = regex.from_string("^\\s+$")
 
-  use ctx, lexeme, _ <- Matcher
+  use mode, lexeme, _ <- Matcher
 
   case regex.check(whitespace, lexeme) {
-    True -> Keep(token, ctx)
-    False -> NoMatch(ctx)
+    True -> Keep(token, mode)
+    False -> NoMatch
   }
 }
 
@@ -261,18 +417,18 @@ pub fn run(
 ///
 pub fn run_custom(
   source: String,
-  ctx: ctx,
-  lexer: Lexer(a, ctx),
+  mode: mode,
+  lexer: Lexer(a, mode),
 ) -> Result(List(Token(a)), Error) {
-  do_run(lexer, ctx, State(string.to_graphemes(source), [], #(1, 1, ""), 1, 1))
+  do_run(lexer, mode, State(string.to_graphemes(source), [], #(1, 1, ""), 1, 1))
 }
 
 fn do_run(
-  lexer: Lexer(a, ctx),
-  context: ctx,
+  lexer: Lexer(a, mode),
+  mode: mode,
   state: State(a),
 ) -> Result(List(Token(a)), Error) {
-  let matchers = lexer.matchers(context)
+  let matchers = lexer.matchers(mode)
 
   case state.source, state.current {
     // If we're at the end of the source and there's no lexeme left to match, 
@@ -287,8 +443,9 @@ fn do_run(
     // we'll run the final `do_match` and return the result. If we get a `NoMatch`
     // at this point something went wrong.
     [], #(start_row, start_col, lexeme) ->
-      case do_match(context, lexeme, "", matchers) {
-        NoMatch(_) -> Error(NoMatchFound(start_row, start_col, lexeme))
+      case do_match(mode, lexeme, "", matchers) {
+        NoMatch -> Error(NoMatchFound(start_row, start_col, lexeme))
+        Skip -> Error(NoMatchFound(start_row, start_col, lexeme))
         Drop(_) -> Ok(list.reverse(state.tokens))
         Keep(value, _) -> {
           let span = Span(start_row, start_col, state.row, state.col)
@@ -299,21 +456,21 @@ fn do_run(
       }
 
     // When lexing we include a one-grapheme lookahead to help us with things like
-    // matching identifiers or other context-aware tokens. This just takes the 
-    // next grapheme from the source (we call it `lookahead` here) and calls the
+    // matching identifiers or other mode-aware tokens. This just takes the 
+    // skip grapheme from the source (we call it `lookahead` here) and calls the
     // `do_match` function with it and some other bits.
     [lookahead, ..rest], #(start_row, start_col, lexeme) -> {
-      let row = next_row(state.row, lexeme)
-      let col = next_col(state.col, lexeme)
+      let row = next_row(state.row, lookahead)
+      let col = next_col(state.col, lookahead)
 
-      case do_match(context, lexeme, lookahead, matchers) {
-        Keep(value, ctx) -> {
+      case do_match(mode, lexeme, lookahead, matchers) {
+        Keep(value, mode) -> {
           let span = Span(start_row, start_col, state.row, state.col)
           let token = Token(span, lexeme, value)
 
           do_run(
             lexer,
-            ctx,
+            mode,
             State(
               source: rest,
               tokens: [token, ..state.tokens],
@@ -324,14 +481,31 @@ fn do_run(
           )
         }
 
+        // A skip says that a matcher has matched the lexeme but still wants to
+        // consume more input. This is mostly useful for things like identifiers
+        // where the current lexeme is in the set of reserved words but we can
+        // see the lookahead and know that it's not a reserved word.
+        Skip ->
+          do_run(
+            lexer,
+            mode,
+            State(
+              source: rest,
+              tokens: state.tokens,
+              current: #(start_row, start_col, lexeme <> lookahead),
+              row: row,
+              col: col,
+            ),
+          )
+
         // A drop says that we've matched the lexeme but we don't want to emit a
         // token. This is mostly useful for things like comments or whitespace that
         // users may not want to appear in the final token stream but do want to
         // handle in the lexer.
-        Drop(ctx) ->
+        Drop(mode) ->
           do_run(
             lexer,
-            ctx,
+            mode,
             State(
               source: rest,
               tokens: state.tokens,
@@ -341,10 +515,10 @@ fn do_run(
             ),
           )
 
-        NoMatch(ctx) ->
+        NoMatch ->
           do_run(
             lexer,
-            ctx,
+            mode,
             State(
               source: rest,
               tokens: state.tokens,
@@ -359,17 +533,18 @@ fn do_run(
 }
 
 fn do_match(
-  ctx: ctx,
+  mode: mode,
   str: String,
   lookahead: String,
-  matchers: List(Matcher(a, ctx)),
-) -> Match(a, ctx) {
-  use _, matcher <- list.fold_until(matchers, NoMatch(ctx))
+  matchers: List(Matcher(a, mode)),
+) -> Match(a, mode) {
+  use _, matcher <- list.fold_until(matchers, NoMatch)
 
-  case matcher.run(ctx, str, lookahead) {
+  case matcher.run(mode, str, lookahead) {
     Keep(_, _) as match -> list.Stop(match)
+    Skip -> list.Stop(Skip)
     Drop(_) as match -> list.Stop(match)
-    NoMatch(_) as no_match -> list.Continue(no_match)
+    NoMatch -> list.Continue(NoMatch)
   }
 }
 
