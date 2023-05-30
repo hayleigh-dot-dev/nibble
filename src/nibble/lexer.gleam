@@ -389,6 +389,19 @@ pub fn variable(
 
 ///
 ///
+pub fn spaces(token: a) -> Matcher(a, mode) {
+  let assert Ok(spaces) = regex.from_string("^[ \\t]+")
+
+  use mode, lexeme, _ <- Matcher
+
+  case regex.check(spaces, lexeme) {
+    True -> Keep(token, mode)
+    False -> NoMatch
+  }
+}
+
+///
+///
 pub fn whitespace(token: a) -> Matcher(a, mode) {
   let assert Ok(whitespace) = regex.from_string("^\\s+$")
 
@@ -397,6 +410,22 @@ pub fn whitespace(token: a) -> Matcher(a, mode) {
   case regex.check(whitespace, lexeme) {
     True -> Keep(token, mode)
     False -> NoMatch
+  }
+}
+
+///
+pub fn comment(start: String, to_value: fn(String) -> a) -> Matcher(a, mode) {
+  let drop_length = string.length(start)
+  use mode, lexeme, lookahead <- Matcher
+
+  case string.starts_with(lexeme, start), lookahead {
+    True, "\n" ->
+      lexeme
+      |> string.drop_left(drop_length)
+      |> to_value
+      |> Keep(mode)
+    True, _ -> Skip
+    False, _ -> NoMatch
   }
 }
 
