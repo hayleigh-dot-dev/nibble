@@ -8,7 +8,7 @@ import gleam/io
 import gleam/option.{None, Some}
 import gleam/map.{Map}
 import gleeunit/should
-import nibble.{Break, Continue, do, do_in, return}
+import nibble.{Break, Continue, do, return}
 import nibble/lexer
 
 // TYPES -----------------------------------------------------------------------
@@ -136,10 +136,10 @@ fn parser() {
 }
 
 fn key_value_parser(env) {
-  use k <- nibble.do(key_parser())
-  use _ <- nibble.do(nibble.token(Equals))
-  use v <- nibble.do(val_parser())
-  use _ <- nibble.do(nibble.one_of([nibble.token(NewLine), nibble.eof()]))
+  use k <- do(key_parser())
+  use _ <- do(nibble.token(Equals))
+  use v <- do(val_parser())
+  use _ <- do(nibble.one_of([nibble.token(NewLine), nibble.eof()]))
 
   return(map.insert(env, k, v))
 }
