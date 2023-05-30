@@ -5,9 +5,9 @@ import gleam/int
 import gleam/io
 import gleam/option.{None, Some}
 import gleeunit/should
-import nibble.{Parser, do, do_in, return}
+import nibble.{do, do_in, return}
 import nibble/pratt
-import nibble/lexer.{Keep, NoMatch, Skip, Span, Token}
+import nibble/lexer
 
 // TYPES -----------------------------------------------------------------------
 
@@ -107,9 +107,9 @@ pub fn mismatched_parens_test() {
   let input = "2 * (3 + 4"
   let expected = [
     nibble.DeadEnd(
-      Span(1, 10, 1, 11),
+      lexer.Span(1, 10, 1, 11),
       nibble.EndOfInput,
-      [nibble.Located(Span(1, 5, 1, 6), InSubExpr)],
+      [nibble.Located(lexer.Span(1, 5, 1, 6), InSubExpr)],
     ),
   ]
 
