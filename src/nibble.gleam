@@ -67,6 +67,7 @@ type State(tok, ctx) {
 }
 
 ///
+///
 pub type Located(ctx) {
   Located(pos: Span, context: ctx)
 }
@@ -77,6 +78,7 @@ type CanBacktrack {
 
 // RUNNING PARSERS -------------------------------------------------------------
 
+///
 ///
 pub fn run(
   src: List(Token(tok)),
@@ -115,10 +117,12 @@ fn next(state: State(tok, ctx)) -> #(Option(tok), State(tok, ctx)) {
 // CONSTRUCTORS ----------------------------------------------------------------
 
 ///
+///
 pub fn return(a: a) -> Parser(a, tok, ctx) {
   Parser(fn(state) { Cont(CanBacktrack(False), a, state) })
 }
 
+///
 ///
 pub fn fail(message: String) -> Parser(a, tok, ctx) {
   Parser(fn(state) {
@@ -127,12 +131,14 @@ pub fn fail(message: String) -> Parser(a, tok, ctx) {
 }
 
 ///
+///
 pub fn lazy(parser: fn() -> Parser(a, tok, ctx)) -> Parser(a, tok, ctx) {
   Parser(fn(state) { runwrap(state, parser()) })
 }
 
 // BACKTRACKING ----------------------------------------------------------------
 
+///
 ///
 pub fn backtrackable(parser: Parser(a, tok, ctx)) -> Parser(a, tok, ctx) {
   Parser(fn(state) {
@@ -143,6 +149,7 @@ pub fn backtrackable(parser: Parser(a, tok, ctx)) -> Parser(a, tok, ctx) {
   })
 }
 
+///
 ///
 pub fn commit(to a: a) -> Parser(a, tok, ctx) {
   Parser(fn(state) { Cont(CanBacktrack(True), a, state) })
@@ -157,6 +164,7 @@ fn should_commit(a: CanBacktrack, or b: CanBacktrack) -> CanBacktrack {
 
 // MANIPULATING PARSERS --------------------------------------------------------
 
+///
 ///
 pub fn do(
   parser: Parser(a, tok, ctx),
@@ -175,6 +183,8 @@ pub fn do(
   })
 }
 
+///
+///
 pub fn do_in(
   context: ctx,
   parser: Parser(a, tok, ctx),
@@ -194,12 +204,14 @@ pub fn then(
 }
 
 ///
+///
 pub fn map(parser: Parser(a, tok, ctx), f: fn(a) -> b) -> Parser(b, tok, ctx) {
   use a <- do(parser)
 
   return(f(a))
 }
 
+///
 ///
 pub fn replace(parser: Parser(a, tok, ctx), with b: b) -> Parser(b, tok, ctx) {
   map(parser, fn(_) { b })
@@ -208,10 +220,12 @@ pub fn replace(parser: Parser(a, tok, ctx), with b: b) -> Parser(b, tok, ctx) {
 // SIMPLE PARSERS --------------------------------------------------------------
 
 ///
+///
 pub fn any() -> Parser(tok, tok, ctx) {
   take_if("a single grapheme", function.constant(True))
 }
 
+///
 ///
 pub fn token(tok: tok) -> Parser(Nil, tok, ctx) {
   use state <- Parser
@@ -229,6 +243,7 @@ pub fn token(tok: tok) -> Parser(Nil, tok, ctx) {
 }
 
 ///
+///
 pub fn eof() -> Parser(Nil, tok, ctx) {
   Parser(fn(state) {
     case next(state) {
@@ -242,6 +257,7 @@ pub fn eof() -> Parser(Nil, tok, ctx) {
 
 // BRANCHING AND LOOPING -------------------------------------------------------
 
+///
 ///
 pub fn one_of(parsers: List(Parser(a, tok, ctx))) -> Parser(a, tok, ctx) {
   use state <- Parser
@@ -260,6 +276,7 @@ pub fn one_of(parsers: List(Parser(a, tok, ctx))) -> Parser(a, tok, ctx) {
 }
 
 ///
+///
 pub fn list(
   parser: Parser(a, tok, ctx),
   separator sep: Parser(x, tok, ctx),
@@ -271,8 +288,19 @@ pub fn list(
   ])
 }
 
+///
+///
 pub fn many(parser: Parser(a, tok, ctx)) -> Parser(List(a), tok, ctx) {
   list(parser, return(Nil))
+}
+
+///
+///
+pub fn many1(parser: Parser(a, tok, ctx)) -> Parser(List(a), tok, ctx) {
+  use x <- do(parser)
+  use xs <- do(many(parser))
+
+  return([x, ..xs])
 }
 
 fn more(
@@ -293,11 +321,15 @@ fn more(
   ])
 }
 
+///
+///
 pub type Loop(a, state) {
   Continue(state)
   Break(a)
 }
 
+///
+///
 pub fn loop(
   init: state,
   step: fn(state) -> Parser(Loop(a, state), tok, ctx),
@@ -324,6 +356,7 @@ fn loop_help(f, commit, loop_state, state) {
 
 // PREDICATES ------------------------------------------------------------------
 
+///
 ///
 pub fn take_if(
   expecting: String,
@@ -384,10 +417,13 @@ pub fn take_while1(
 }
 
 ///
+///
 pub fn take_until(predicate: fn(tok) -> Bool) -> Parser(List(tok), tok, ctx) {
   take_while(function.compose(predicate, bool.negate))
 }
 
+///
+///
 pub fn take_until1(
   expecting: String,
   predicate: fn(tok) -> Bool,
@@ -395,10 +431,14 @@ pub fn take_until1(
   take_while1(expecting, function.compose(predicate, bool.negate))
 }
 
+///
+///
 pub fn or(parser: Parser(a, tok, ctx), default: a) -> Parser(a, tok, ctx) {
   one_of([parser, return(default)])
 }
 
+///
+///
 pub fn optional(parser: Parser(a, tok, ctx)) -> Parser(Option(a), tok, ctx) {
   one_of([map(parser, Some), return(None)])
 }
