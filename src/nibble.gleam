@@ -17,21 +17,21 @@ import nibble/lexer.{Span, Token}
 ///
 /// ```
 /// Parser(a, tok, ctx)
-///        ^            : the type of value to produce
-///           ^^^       : the type of tokens to consume
-///                ^^^  : the type of context a parser may be in
+/// //     ^            (1)
+/// //        ^^^       (2)
+/// //             ^^^  (3)
 /// ```
 /// 
-/// • `a` is the type of value that the parser knows how to produce. If you were
+/// 1) `a` is the type of value that the parser knows how to produce. If you were
 ///   writing a parser for a programming language, this might be your expression
 ///   type.
 ///
-/// • `tok` is the type of tokens that the parser knows how to consume. You can
+/// 2) `tok` is the type of tokens that the parser knows how to consume. You can
 ///   take a look at the [`Token`](./nibble/lexer#Token) type for a bit more info,
 ///   but note that it's not necessary for the token stream to come from nibble's
 ///   lexer.
 ///
-/// • `ctx` is used to make error reporting nicer. You can place a parser into a
+/// 3) `ctx` is used to make error reporting nicer. You can place a parser into a
 ///   custom context. When the parser runs the context gets pushed into a stack.
 ///   If the parser fails you can see the context stack in the error message,
 ///   which can make error reporting and debugging much easier!

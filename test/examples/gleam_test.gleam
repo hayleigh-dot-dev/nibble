@@ -7,7 +7,7 @@ import gleam/set
 import gleam/string
 import gleeunit/should
 import nibble.{Parser, do, return}
-import nibble/lexer.{Keep, NoMatch, Skip, Span, Token}
+import nibble/lexer.{Span, Token}
 
 // TYPES: TOKENS ---------------------------------------------------------------
 
