@@ -107,6 +107,7 @@ fn lexer() {
       function.compose(int.to_string, Str),
       function.compose(float.to_string, Str),
     ),
+    // Drop comments and whitespace
     lexer.comment("#", function.constant(Nil))
     |> lexer.ignore,
     lexer.spaces(Nil)
@@ -126,6 +127,7 @@ fn parser() {
     //
     // We use `many1` here because we need to consume at least _one_ token to 
     // prevent an infinite loop.
+    //
     nibble.many1(nibble.token(NewLine))
     |> nibble.replace(Continue(env)),
     nibble.eof()
@@ -137,8 +139,6 @@ fn key_value_parser(env) {
   use k <- nibble.do(key_parser())
   use _ <- nibble.do(nibble.token(Equals))
   use v <- nibble.do(val_parser())
-  // We're using `many1` here to guarantee k/v pairs are always separated by at
-  // least one new line.
   use _ <- nibble.do(nibble.one_of([nibble.token(NewLine), nibble.eof()]))
 
   return(map.insert(env, k, v))
@@ -158,6 +158,7 @@ fn val_parser() {
 
   case tok {
     Str(v) -> Some(v)
+    // We can treat a single unquoted word as a value
     Key(v) -> Some(v)
     _ -> None
   }
