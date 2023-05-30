@@ -574,15 +574,9 @@ fn lexer() {
     lexer.keyword("type", "[\\W\\D]", TypeT),
     lexer.keyword("use", "[\\W\\D]", UseT),
     // Comments
-    lexer.custom_matcher(fn(mode, lexeme, lookahead) {
-      case lexeme, lookahead {
-        "////" <> content, "\n" -> Keep(CommentModuleT(content), mode)
-        "///" <> content, "\n" -> Keep(CommentDocT(content), mode)
-        "//" <> content, "\n" -> Keep(CommentNormalT(content), mode)
-        "//" <> _, _ -> Skip
-        _, _ -> NoMatch
-      }
-    }),
+    lexer.comment("////", CommentModuleT),
+    lexer.comment("///", CommentDocT),
+    lexer.comment("//", CommentNormalT),
     // Whitespace
     lexer.whitespace(Nil)
     |> lexer.ignore,
