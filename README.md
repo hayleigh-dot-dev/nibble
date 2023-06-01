@@ -1,37 +1,67 @@
 # nibble
 
+A lexer and parser combinator library inspired by [`elm/parser`](https://github.com/elm/parser).
+
 [![Package Version](https://img.shields.io/hexpm/v/nibble)](https://hex.pm/packages/nibble)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/nibble/)
 
-A string parsing library heavily inspired by [`elm/parser`](https://github.com/elm/parser).
+✨ This project is written in **pure Gleam** so you can use it anywhere Gleam
+runs: Erlang, Elixir, Node, Deno, and the browser!
 
 ## Quick start
 
+If you just want to get a feel for what nibble can do, check out the example
+below.
+
 ```gleam
-import gleam/function
-import nibble.{ Parser }
+import nibble.{do, return}
+import nibbler/lexer
 
 type Point {
-    Point(x: Int, y: Int)
+  Point(x: Int, y: Int)
 }
 
-pub fn main () {
-    let parser = 
-        nibble.succeed(function.curry2(Point))
-            |> nibble.drop(nibble.grapheme("("))
-            |> nibble.drop(nibble.spaces())
-            |> nibble.keep(nibble.int())
-            |> nibble.drop(nibble.spaces())
-            |> nibble.drop(nibble.grapheme(","))
-            |> nibble.drop(nibble.spaces())
-            |> nibble.keep(nibble.int())
-            |> nibble.drop(nibble.spaces())
-            |> nibble.drop(nibble.grapheme(")"))
+type Token {
+  Num(Int)
+  LParen
+  RParen
+  Comma
+}
 
-    assert Ok(point) = nibble.run("(1, 2)", parser)
+pub fn main() {
+  // Your lexer knows how to take an input string and
+  // turn it into a flat list of tokens. You define the
+  // type of token you want to use, but nibble will wrap
+  // that up in its own `Token` type that includes the
+  // source span and original lexeme for each token.
+  let lexer = lexer.simple([
+    lexer.int(Num),
+    lexer.token("(", LParen),
+    lexer.token(")", RParen),
+    lexer.token(",", Comma),
+    // Skip over whitespace, we don't care about it!
+    lexer.whitespace(Nil)
+    |> lexer.ignore
+  ])
 
-    point.x //=> 1
-    point.y //=> 2
+  // Your parser(s!) know how to transform a list of
+  // tokens into whatever you want. You have the full
+  // power of Gleam here, so you can go wild!
+  let parser = {
+    use _ <- do(nibble.token(LParen))
+    use x <- do(nibble.int())
+    use _ <- do(nibble.token(Comma))
+    use y <- do(nibble.int())
+    use _ <- do(nibble.token(RParen))
+
+    return(Point(x, y))
+  }
+
+  let assert Ok(tokens) = lexer.run("(1, 2)", lexer)
+  let assert Ok(point) = nibble.run(tokens, parser)
+
+  point.x //=> 1
+  point.y //=> 2
 }
 ```
 
