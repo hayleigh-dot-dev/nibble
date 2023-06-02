@@ -84,11 +84,13 @@ pub fn run(
   src: List(Token(tok)),
   parser: Parser(a, tok, ctx),
 ) -> Result(a, List(DeadEnd(tok, ctx))) {
-  let init =
-    src
-    |> list.index_map(fn(i, grapheme) { #(i, grapheme) })
-    |> map.from_list
-    |> State(0, Span(1, 1, 1, 1), [])
+  let src =
+    list.index_fold(
+      src,
+      map.new(),
+      fn(map, tok, idx) { map.insert(map, idx, tok) },
+    )
+  let init = State(src, 0, Span(1, 1, 1, 1), [])
 
   case runwrap(init, parser) {
     Cont(_, a, _) -> Ok(a)
