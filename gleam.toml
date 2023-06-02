@@ -21,6 +21,6 @@ pages = [
   { title = "Parsing", path = "parsing.html", source = "./docs/02-parsing.md" },
   { title = "Parse Contexts", path = "parse-contexts.html", source = "./docs/03-parse-contexts.md" },
   { title = "Backtracking", path = "backtracking.html", source = "./docs/04-backtracking.md" },
-  { title = "Lexer Modes", path = "lexer-modes.html", source = "./docs/05-lexer-mods.md" },
+  { title = "Lexer Modes", path = "lexer-modes.html", source = "./docs/05-lexer-modes.md" },
   { title = "Pratt Parsing", path = "pratt-parsing.html", source = "./docs/06-pratt-parsing.md" }
 ]
