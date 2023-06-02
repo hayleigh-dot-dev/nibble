@@ -1,6 +1,7 @@
 // IMPORTS ---------------------------------------------------------------------
 
 import gleam/float
+import gleam/function
 import gleam/int
 import gleam/list
 import gleam/regex
@@ -67,7 +68,7 @@ pub fn simple(matchers: List(Matcher(a, Nil))) -> Lexer(a, Nil) {
 
 ///
 ///
-pub fn custom(matchers: fn(mode) -> List(Matcher(a, mode))) -> Lexer(a, mode) {
+pub fn advanced(matchers: fn(mode) -> List(Matcher(a, mode))) -> Lexer(a, mode) {
   Lexer(fn(mode) { matchers(mode) })
 }
 
@@ -109,6 +110,12 @@ pub fn skip(matcher: Matcher(a, mode)) -> Matcher(b, mode) {
 
 ///
 ///
+pub fn custom(f: fn(mode, String, String) -> Match(a, mode)) -> Matcher(a, mode) {
+  Matcher(f)
+}
+
+///
+///
 pub fn map(matcher: Matcher(a, mode), f: fn(a) -> b) -> Matcher(b, mode) {
   use mode, lexeme, lookahead <- Matcher
 
@@ -122,18 +129,23 @@ pub fn map(matcher: Matcher(a, mode), f: fn(a) -> b) -> Matcher(b, mode) {
 
 ///
 ///
-pub fn custom_matcher(
-  f: fn(mode, String, String) -> Match(a, mode),
-) -> Matcher(a, mode) {
-  Matcher(f)
+pub fn then(
+  matcher: Matcher(a, mode),
+  f: fn(a) -> Match(b, mode),
+) -> Matcher(b, mode) {
+  use mode, lexeme, lookahead <- Matcher
+
+  case matcher.run(mode, lexeme, lookahead) {
+    Keep(value, _) -> f(value)
+    Skip -> Skip
+    Drop(mode) -> Drop(mode)
+    NoMatch -> NoMatch
+  }
 }
 
 ///
 ///
-pub fn transition(
-  matcher: Matcher(a, mode),
-  f: fn(mode) -> mode,
-) -> Matcher(a, mode) {
+pub fn into(matcher: Matcher(a, mode), f: fn(mode) -> mode) -> Matcher(a, mode) {
   use mode, lexeme, lookahead <- Matcher
 
   case matcher.run(mode, lexeme, lookahead) {
@@ -390,12 +402,18 @@ pub fn variable(
 ///
 ///
 pub fn spaces(token: a) -> Matcher(a, mode) {
+  spaces_(function.constant(token))
+}
+
+///
+///
+pub fn spaces_(to_value: fn(String) -> a) -> Matcher(a, mode) {
   let assert Ok(spaces) = regex.from_string("^[ \\t]+")
 
   use mode, lexeme, _ <- Matcher
 
   case regex.check(spaces, lexeme) {
-    True -> Keep(token, mode)
+    True -> Keep(to_value(lexeme), mode)
     False -> NoMatch
   }
 }
@@ -444,7 +462,7 @@ pub fn run(
 
 ///
 ///
-pub fn run_custom(
+pub fn run_advanced(
   source: String,
   mode: mode,
   lexer: Lexer(a, mode),
