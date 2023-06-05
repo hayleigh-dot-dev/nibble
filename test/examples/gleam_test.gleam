@@ -607,11 +607,11 @@ fn declaration_parser() {
 
 fn import_declaration_parser(docs) {
   use _ <- do(nibble.token(ImportT))
-  use path <- do(nibble.list(lower_name_parser(), nibble.token(SlashT)))
+  use path <- do(nibble.sequence(lower_name_parser(), nibble.token(SlashT)))
   use #(name, path) <- do({
     case queue.pop_back(queue.from_list(path)) {
       Ok(#(name, path)) -> return(#(name, queue.to_list(path)))
-      // 
+      //
       Error(_) -> nibble.fail("missing import path")
     }
   })
@@ -624,7 +624,7 @@ fn import_declaration_parser(docs) {
 fn imported_bindings_parser() {
   use _ <- do(nibble.token(DotT))
   use _ <- do(nibble.token(LBraceT))
-  use bindings <- do(nibble.list(
+  use bindings <- do(nibble.sequence(
     imported_binding_parser(),
     nibble.token(CommaT),
   ))
@@ -690,7 +690,7 @@ fn type_declaration_parser(public, docs) {
 
 fn type_declaration_arguments_parser() {
   use _ <- do(nibble.token(LParenT))
-  use args <- do(nibble.list(lower_name_parser(), nibble.token(CommaT)))
+  use args <- do(nibble.sequence(lower_name_parser(), nibble.token(CommaT)))
   use _ <- do(nibble.token(RParenT))
 
   return(args)
@@ -727,7 +727,7 @@ fn type_custom_variant_parser() {
 
 fn variant_args_parser() {
   use _ <- do(nibble.token(LParenT))
-  use args <- do(nibble.list(variant_arg_parser(), nibble.token(CommaT)))
+  use args <- do(nibble.sequence(variant_arg_parser(), nibble.token(CommaT)))
   use _ <- do(nibble.token(RParenT))
 
   return(args)

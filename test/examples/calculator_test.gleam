@@ -109,7 +109,7 @@ pub fn mismatched_parens_test() {
     nibble.DeadEnd(
       lexer.Span(1, 10, 1, 11),
       nibble.EndOfInput,
-      [nibble.Located(lexer.Span(1, 5, 1, 6), InSubExpr)],
+      [#(lexer.Span(1, 5, 1, 6), InSubExpr)],
     ),
   ]
 

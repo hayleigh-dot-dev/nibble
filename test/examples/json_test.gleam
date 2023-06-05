@@ -376,7 +376,7 @@ fn parser() -> Parser(Json, JsonT, Context) {
 
 fn array_parser() -> Parser(Json, JsonT, Context) {
   use _ <- nibble.do(nibble.token(LBracket))
-  use elements <- nibble.do(nibble.list(
+  use elements <- nibble.do(nibble.sequence(
     nibble.lazy(parser),
     nibble.token(Comma),
   ))
@@ -387,7 +387,7 @@ fn array_parser() -> Parser(Json, JsonT, Context) {
 
 fn object_parser() -> Parser(Json, JsonT, Context) {
   use _ <- nibble.do(nibble.token(LBrace))
-  use elements <- nibble.do(nibble.list(
+  use elements <- nibble.do(nibble.sequence(
     nibble.lazy(object_element_parser),
     nibble.token(Comma),
   ))
