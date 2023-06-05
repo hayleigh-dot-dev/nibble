@@ -14,6 +14,7 @@ If you just want to get a feel for what nibble can do, check out the example
 below.
 
 ```gleam
+import gleam/option.{Some, None}
 import nibble.{do, return}
 import nibbler/lexer
 
@@ -49,12 +50,23 @@ pub fn main() {
   // power of Gleam here, so you can go wild!
   let parser = {
     use _ <- do(nibble.token(LParen))
-    use x <- do(nibble.int())
+    use x <- do(int_parser())
     use _ <- do(nibble.token(Comma))
-    use y <- do(nibble.int())
+    use y <- do(int_parser())
     use _ <- do(nibble.token(RParen))
 
     return(Point(x, y))
+  }
+
+  let int_parser {
+    // Use `take_map` to only consume certain kinds of tokens and transform the
+    // result.
+    use tok <- nibble.take_map
+
+    case tok {
+      Num(n) -> Some(n)
+      _ -> None
+    }
   }
 
   let assert Ok(tokens) = lexer.run("(1, 2)", lexer)
