@@ -58,7 +58,7 @@ pub fn main() {
     return(Point(x, y))
   }
 
-  let int_parser {
+  let int_parser = {
     // Use `take_map` to only consume certain kinds of tokens and transform the
     // result.
     use tok <- nibble.take_map
