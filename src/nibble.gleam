@@ -262,13 +262,15 @@ pub fn throw(message: String) -> Parser(a, tok, ctx) {
   Fail(CanBacktrack(False), bag)
 }
 
-///
+/// Create a parser that consumes no tokens and always fails with the given
+/// error message.
 ///
 pub fn fail(message: String) -> Parser(a, tok, ctx) {
   throw(message)
 }
 
-///
+/// Defer the creation of a parser until it is needed. This is often most useful
+/// when creating a parser that is recursive and is *not* a function.
 ///
 pub fn lazy(parser: fn() -> Parser(a, tok, ctx)) -> Parser(a, tok, ctx) {
   use state <- Parser
@@ -278,7 +280,22 @@ pub fn lazy(parser: fn() -> Parser(a, tok, ctx)) -> Parser(a, tok, ctx) {
 
 // BACKTRACKING ----------------------------------------------------------------
 
-///
+/// By default, parsers will not backtrack if they fail after consuming at least
+/// one token. Passing a parser to `backtrackable` will change this behaviour and
+/// allows us to jump back to the state of the parser before it consumed any input
+/// and try another one.
+/// 
+/// This is most useful when you want to quickly try a few different parsers using
+/// [`one_of`](#one_of).
+/// 
+/// 🚨 Backtracing parsers can drastically reduce performance, so you should avoid
+/// them where possible. A common reason folks reach for backtracking is when they
+/// want to try multiple branches that start with the same token or same sequence
+/// of tokens.
+/// 
+/// To avoid backtracking in these cases, you can create an intermediate parser
+/// that consumes the common tokens _and then_ use [`one_of`](#one_of) to try
+/// the different branches.
 ///
 pub fn backtrackable(parser: Parser(a, tok, ctx)) -> Parser(a, tok, ctx) {
   use state <- Parser
@@ -287,14 +304,6 @@ pub fn backtrackable(parser: Parser(a, tok, ctx)) -> Parser(a, tok, ctx) {
     Cont(_, a, state) -> Cont(CanBacktrack(False), a, state)
     Fail(_, bag) -> Fail(CanBacktrack(False), bag)
   }
-}
-
-///
-///
-pub fn commit(to a: a) -> Parser(a, tok, ctx) {
-  use state <- Parser
-
-  Cont(CanBacktrack(True), a, state)
 }
 
 fn should_commit(a: CanBacktrack, or b: CanBacktrack) -> CanBacktrack {
@@ -363,7 +372,7 @@ pub fn replace(parser: Parser(a, tok, ctx), with b: b) -> Parser(b, tok, ctx) {
 ///
 ///
 pub fn any() -> Parser(tok, tok, ctx) {
-  take_if("a single grapheme", function.constant(True))
+  take_if("a single token", function.constant(True))
 }
 
 ///
@@ -499,6 +508,15 @@ fn loop_help(f, commit, loop_state, state) {
 
 ///
 ///
+pub fn guard(cond: Bool, expecting: String) -> Parser(Nil, tok, ctx) {
+  case cond {
+    True -> return(Nil)
+    False -> fail(expecting)
+  }
+}
+
+///
+///
 pub fn take_if(
   expecting: String,
   predicate: fn(tok) -> Bool,
@@ -545,7 +563,7 @@ pub fn take_while(predicate: fn(tok) -> Bool) -> Parser(List(tok), tok, ctx) {
 ///
 ///
 /// 💡 If this parser succeeds, the list produced is guaranteed to be non-empty.
-/// `let assert` away!
+/// Feel free to `let assert` the result!
 ///
 pub fn take_while1(
   expecting: String,
@@ -565,6 +583,9 @@ pub fn take_until(predicate: fn(tok) -> Bool) -> Parser(List(tok), tok, ctx) {
 
 ///
 ///
+/// 💡 If this parser succeeds, the list produced is guaranteed to be non-empty.
+/// Feel free to `let assert` the result!
+///
 pub fn take_until1(
   expecting: String,
   predicate: fn(tok) -> Bool,
@@ -574,17 +595,75 @@ pub fn take_until1(
 
 ///
 ///
+pub fn take_up_to(
+  parser: Parser(a, tok, ctx),
+  count: Int,
+) -> Parser(List(a), tok, ctx) {
+  case count {
+    0 -> return([])
+    _ ->
+      {
+        use x <- do(parser)
+        use xs <- do(take_up_to(parser, count - 1))
+
+        return([x, ..xs])
+      }
+      |> or([])
+  }
+}
+
+///
+/// 
+pub fn take_at_least(
+  parser: Parser(a, tok, ctx),
+  count: Int,
+) -> Parser(List(a), tok, ctx) {
+  case count {
+    0 -> many(parser)
+    _ -> {
+      use x <- do(parser)
+      use xs <- do(take_at_least(parser, count - 1))
+
+      return([x, ..xs])
+    }
+  }
+}
+
+///
+/// 
+pub fn take_exactly(
+  parser: Parser(a, tok, ctx),
+  count: Int,
+) -> Parser(List(a), tok, ctx) {
+  case count {
+    0 -> return([])
+    _ -> {
+      use x <- do(parser)
+      use xs <- do(take_exactly(parser, count - 1))
+
+      return([x, ..xs])
+    }
+  }
+}
+
+/// Try the given parser, but if it fails return the given default value instead
+/// of failing.
+///
 pub fn or(parser: Parser(a, tok, ctx), default: a) -> Parser(a, tok, ctx) {
   one_of([parser, return(default)])
 }
 
-///
+/// Try the given parser, but if it fails return 
+/// [`None`](#https://hexdocs.pm/gleam_stdlib/gleam/option.html#Option) instead
+/// of failing.
 ///
 pub fn optional(parser: Parser(a, tok, ctx)) -> Parser(Option(a), tok, ctx) {
   one_of([map(parser, Some), return(None)])
 }
 
-///
+/// Take the next token and attempt to transform it with the given function. This
+/// is useful when creating reusable primtive parsers for your own tokens such as
+/// `take_identifier` or `take_number`.
 ///
 pub fn take_map(
   expecting: String,
@@ -604,7 +683,7 @@ pub fn take_map(
   }
 }
 
-///
+/// 
 ///
 pub fn take_map_while(f: fn(tok) -> Option(a)) -> Parser(List(a), tok, ctx) {
   use state <- Parser
@@ -622,6 +701,11 @@ pub fn take_map_while(f: fn(tok) -> Option(a)) -> Parser(List(a), tok, ctx) {
   }
 }
 
+///
+/// 
+/// 💡 If this parser succeeds, the list produced is guaranteed to be non-empty.
+/// Feel free to `let assert` the result!
+///
 pub fn take_map_while1(
   expecting: String,
   f: fn(tok) -> Option(a),
@@ -710,7 +794,7 @@ fn pop_context(state: State(tok, ctx)) -> State(tok, ctx) {
   }
 }
 
-/// Run the given parser and then inspect it's state.
+/// Run the given parser and then inspect it's state. 
 pub fn inspect(
   parser: Parser(a, tok, ctx),
   message: String,
