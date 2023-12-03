@@ -6,7 +6,7 @@ import gleam/int
 import gleam/list
 import gleam/regex
 import gleam/result
-import gleam/set.{Set}
+import gleam/set.{type Set}
 import gleam/string
 
 // TYPES -----------------------------------------------------------------------

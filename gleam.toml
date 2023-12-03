@@ -7,9 +7,10 @@ version = "1.0.0-rc.3"
 licences = ["MIT"]
 description = "A string parsing library heavily inspired by elm/parser."
 repository = { type = "github", user = "hayleigh-dot-dev", repo = "gleam-nibble" }
+gleam = ">= 0.32.0"
 
 [dependencies]
-gleam_stdlib = "~> 0.29"
+gleam_stdlib = "~> 0.32"
 
 [dev-dependencies]
 gleeunit = "~> 0.6"

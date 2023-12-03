@@ -5,8 +5,8 @@ import gleam/io
 import gleam/int
 import gleam/function
 import gleeunit/should
-import nibble.{Parser}
-import nibble/lexer.{Lexer}
+import nibble.{type Parser}
+import nibble/lexer.{type Lexer}
 
 // TYPES -----------------------------------------------------------------------
 

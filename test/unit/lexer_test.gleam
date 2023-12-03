@@ -4,7 +4,7 @@ import gleam/io
 import gleam/set
 import gleam/string
 import gleeunit/should
-import nibble/lexer.{Matcher, Span, Token}
+import nibble/lexer.{type Matcher, type Token, Span, Token}
 
 // TYPES -----------------------------------------------------------------------
 

@@ -11,7 +11,7 @@
 ////  const orderFunctions = [
 ////    { names: ['run', 'return', 'succeed', 'fail', 'throw'] },
 ////    { heading: 'Basics', names: ['token', 'any', 'eof', 'lazy'] },
-////    { heading: 'Pipelines', names: ['succeed', 'fail', 'then', 'map', 'replace', 'in'] },
+////    { heading: 'Pipelines', names: ['succeed', 'fail', 'then', 'dict', 'replace', 'in'] },
 ////    { heading: 'With <code>use</code>', names: ['return', 'throw', 'do', 'do_in'] },
 ////    { heading: 'Predicates', names: ['take_if', 'take_while', 'take_while1', 'take_until', 'take_until1', 'take_map', 'take_map_while', 'take_map_while1'] },
 ////    { heading: 'Transforms', names: ['take_map', 'take_map_while', 'take_map_while1'] },
@@ -80,9 +80,9 @@ import gleam/function
 import gleam/io
 import gleam/string
 import gleam/list
-import gleam/map.{Map}
-import gleam/option.{None, Option, Some}
-import nibble/lexer.{Span, Token}
+import gleam/dict.{type Dict}
+import gleam/option.{type Option, None, Some}
+import nibble/lexer.{type Span, type Token, Span, Token}
 
 // TYPES -----------------------------------------------------------------------
 
@@ -121,7 +121,7 @@ type Step(a, tok, ctx) {
 type State(tok, ctx) {
   State(
     // The Gleam stdlib doesn't seem to have an `Array` type, so we'll just
-    // use a `Map` instead. We only need something for indexed access, to it's
+    // use a `Dict` instead. We only need something for indexed access, to it's
     // not a huge deal.
     //
     // TODO: Louis says making an `Array` backed by tuples in Erlang will
@@ -130,9 +130,9 @@ type State(tok, ctx) {
     //
     // ❓ You might wonder why we're wanting an `Array` at all when we could just
     // use a `List` and backtrack to a previous state when we need to. By tracking
-    // the index and indexing into the map/array directly we save ever having to
+    // the index and indexing into the dict/array directly we save ever having to
     // allocate something new, which is a big deal for performance!
-    src: Map(Int, Token(tok)),
+    src: Dict(Int, Token(tok)),
     idx: Int,
     pos: Span,
     ctx: List(#(Span, ctx)),
@@ -157,8 +157,8 @@ pub fn run(
   let src =
     list.index_fold(
       src,
-      map.new(),
-      fn(map, tok, idx) { map.insert(map, idx, tok) },
+      dict.new(),
+      fn(dict, tok, idx) { dict.insert(dict, idx, tok) },
     )
   let init = State(src, 0, Span(1, 1, 1, 1), [])
 
@@ -177,7 +177,7 @@ fn runwrap(
 }
 
 fn next(state: State(tok, ctx)) -> #(Option(tok), State(tok, ctx)) {
-  case map.get(state.src, state.idx) {
+  case dict.get(state.src, state.idx) {
     Error(_) -> #(option.None, state)
     Ok(Token(span, _, tok)) -> #(
       option.Some(tok),

@@ -7,7 +7,9 @@ import gleam/set
 import gleam/string
 import gleam/io
 import gleeunit/should
-import nibble/lexer.{Drop, Keep, Matcher, NoMatch, Skip, Span, Token}
+import nibble/lexer.{
+  type Matcher, type Token, Drop, Keep, NoMatch, Skip, Span, Token,
+}
 
 // TYPES -----------------------------------------------------------------------
 

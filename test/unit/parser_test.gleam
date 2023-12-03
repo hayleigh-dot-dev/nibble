@@ -3,8 +3,8 @@
 import gleam/io
 import gleam/list
 import gleeunit/should
-import nibble.{Parser, do, return}
-import nibble/lexer.{Token}
+import nibble.{type Parser, do, return}
+import nibble/lexer.{type Token}
 
 // STRESS TESTS ----------------------------------------------------------------
 

@@ -6,7 +6,7 @@ import gleam/float
 import gleam/set
 import gleam/io
 import gleam/option.{None, Some}
-import gleam/map.{Map}
+import gleam/dict.{type Dict}
 import gleeunit/should
 import nibble.{Break, Continue, do, return}
 import nibble/lexer
@@ -14,7 +14,7 @@ import nibble/lexer
 // TYPES -----------------------------------------------------------------------
 
 type Env =
-  Map(String, String)
+  Dict(String, String)
 
 type TokenT {
   Key(String)
@@ -28,7 +28,7 @@ type TokenT {
 pub fn empty_env_test() {
   use test <- should("parse an empty env")
   let input = ""
-  let expected = map.new()
+  let expected = dict.new()
 
   test(input, expected)
 }
@@ -36,7 +36,7 @@ pub fn empty_env_test() {
 pub fn single_env_test() {
   use test <- should("parse a single k/v pair")
   let input = "FOO=bar"
-  let expected = map.from_list([#("FOO", "bar")])
+  let expected = dict.from_list([#("FOO", "bar")])
 
   test(input, expected)
 }
@@ -44,7 +44,7 @@ pub fn single_env_test() {
 pub fn single_env_string_test() {
   use test <- should("parse a single k/v pair with a string value")
   let input = "FOO='bar'"
-  let expected = map.from_list([#("FOO", "bar")])
+  let expected = dict.from_list([#("FOO", "bar")])
 
   test(input, expected)
 }
@@ -52,7 +52,7 @@ pub fn single_env_string_test() {
 pub fn single_env_number_test() {
   use test <- should("parse a single k/v pair with a number value")
   let input = "FOO=123"
-  let expected = map.from_list([#("FOO", "123")])
+  let expected = dict.from_list([#("FOO", "123")])
 
   test(input, expected)
 }
@@ -60,7 +60,7 @@ pub fn single_env_number_test() {
 pub fn single_env_float_test() {
   use test <- should("parse a single k/v pair with a float value")
   let input = "FOO=123.456"
-  let expected = map.from_list([#("FOO", "123.456")])
+  let expected = dict.from_list([#("FOO", "123.456")])
 
   test(input, expected)
 }
@@ -72,7 +72,7 @@ pub fn multi_env_test() {
     FOO=bar
     BAZ=qux
     "
-  let expected = map.from_list([#("FOO", "bar"), #("BAZ", "qux")])
+  let expected = dict.from_list([#("FOO", "bar"), #("BAZ", "qux")])
 
   test(input, expected)
 }
@@ -116,7 +116,7 @@ fn lexer() {
 }
 
 fn parser() {
-  use env <- nibble.loop(map.new())
+  use env <- nibble.loop(dict.new())
 
   nibble.one_of([
     key_value_parser(env)
@@ -141,7 +141,7 @@ fn key_value_parser(env) {
   use v <- do(val_parser())
   use _ <- do(nibble.one_of([nibble.token(NewLine), nibble.eof()]))
 
-  return(map.insert(env, k, v))
+  return(dict.insert(env, k, v))
 }
 
 fn key_parser() {
