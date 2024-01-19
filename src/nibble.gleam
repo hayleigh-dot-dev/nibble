@@ -8,8 +8,8 @@ import gleam/function
 import gleam/int
 import gleam/io
 import gleam/list
-import gleam/map.{Map}
-import gleam/option.{Option}
+import gleam/dict.{type Dict}
+import gleam/option.{type Option}
 import gleam/string
 import nibble/predicates
 
@@ -23,13 +23,13 @@ pub opaque type Parser(a, ctx) {
 type State(ctx) {
   State(
     // The Gleam stdlib doesn't seem to have an `Array` type, so we'll just
-    // use a `Map` instead. We only need something for indexed access, to it's
+    // use a `Dict` instead. We only need something for indexed access, to it's
     // not a huge deal.
     //
     // TODO: Louis says making an `Array` backed by tuples in Erlang will
     // be way better for performance. In JavaScript we could just use normal
     // arrays - someone should look into this. 
-    src: Map(Int, String),
+    src: Dict(Int, String),
     offset: Int,
     context: List(Located(ctx)),
     row: Int,
@@ -58,8 +58,8 @@ type Backtrackable {
 pub fn run(src: String, parser: Parser(a, ctx)) -> Result(a, List(DeadEnd(ctx))) {
   let graphemes =
     string.to_graphemes(src)
-    |> list.index_map(fn(i, grapheme) { #(i, grapheme) })
-    |> map.from_list
+    |> list.index_map(fn(grapheme, i) { #(i, grapheme) })
+    |> dict.from_list
 
   let init = State(graphemes, 0, [], 1, 1)
 
@@ -76,7 +76,7 @@ fn runwrap(state: State(ctx), parser: Parser(a, ctx)) -> Step(a, ctx) {
 }
 
 fn next(state: State(ctx)) -> #(Option(String), State(ctx)) {
-  case map.get(state.src, state.offset) {
+  case dict.get(state.src, state.offset) {
     Ok("\n") -> #(
       option.Some("\n"),
       State(..state, offset: state.offset + 1, col: 1, row: state.row + 1),
@@ -226,14 +226,10 @@ pub fn string(str: String) -> Parser(Nil, ctx) {
 
       [head, ..tail] -> {
         let parse_each =
-          list.fold(
-            tail,
-            grapheme(head),
-            fn(parse, next) {
-              parse
-              |> drop(grapheme(next))
-            },
-          )
+          list.fold(tail, grapheme(head), fn(parse, next) {
+            parse
+            |> drop(grapheme(next))
+          })
         case runwrap(state, parse_each) {
           Cont(_, _, state) -> Cont(Commit, Nil, state)
           Fail(_, bag) -> Fail(Backtrack, bag)
@@ -294,22 +290,18 @@ pub fn one_of(parsers: List(Parser(a, ctx))) -> Parser(a, ctx) {
   Parser(fn(state) {
     let init = Fail(Backtrack, Empty)
 
-    list.fold_until(
-      parsers,
-      init,
-      fn(result, next) {
-        case result {
-          Cont(_, _, _) -> list.Stop(result)
+    list.fold_until(parsers, init, fn(result, next) {
+      case result {
+        Cont(_, _, _) -> list.Stop(result)
 
-          Fail(Commit, _) -> list.Stop(result)
+        Fail(Commit, _) -> list.Stop(result)
 
-          Fail(_, bag) ->
-            runwrap(state, next)
-            |> add_bag_to_step(bag)
-            |> list.Continue
-        }
-      },
-    )
+        Fail(_, bag) ->
+          runwrap(state, next)
+          |> add_bag_to_step(bag)
+          |> list.Continue
+      }
+    })
   })
 }
 
@@ -330,24 +322,21 @@ fn more(
   parser: Parser(a, ctx),
   separator: Parser(x, ctx),
 ) -> Parser(List(a), ctx) {
-  loop(
-    [x],
-    fn(xs) {
-      one_of([
-        succeed(list.prepend(xs, _))
-        |> drop(separator)
-        |> keep(parser)
-        |> map(Continue),
-        succeed(xs)
-        |> drop(eof())
-        |> map(list.reverse)
-        |> map(Break),
-        succeed(xs)
-        |> map(list.reverse)
-        |> map(Break),
-      ])
-    },
-  )
+  loop([x], fn(xs) {
+    one_of([
+      succeed(list.prepend(xs, _))
+      |> drop(separator)
+      |> keep(parser)
+      |> map(Continue),
+      succeed(xs)
+      |> drop(eof())
+      |> map(list.reverse)
+      |> map(Break),
+      succeed(xs)
+      |> map(list.reverse)
+      |> map(Break),
+    ])
+  })
 }
 
 pub type Loop(a, state) {
