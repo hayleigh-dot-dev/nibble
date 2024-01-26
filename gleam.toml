@@ -1,19 +1,19 @@
 name = "nibble"
-version = "1.0.0-rc.3"
+version = "1.0.0"
 
 # Fill out these fields if you intend to generate HTML documentation or publish
 # your project to the Hex package manager.
 #
 licences = ["MIT"]
-description = "A string parsing library heavily inspired by elm/parser."
+description = "A string parsing library combining a traditional lexer with parser combinators.."
 repository = { type = "github", user = "hayleigh-dot-dev", repo = "gleam-nibble" }
-gleam = ">= 0.32.0"
+gleam = ">= 0.34.0"
 
 [dependencies]
-gleam_stdlib = "~> 0.32"
+gleam_stdlib = "~> 0.34"
 
 [dev-dependencies]
-gleeunit = "~> 0.6"
+gleeunit = "~> 1.0"
 
 [documentation]
 pages = [
