@@ -155,11 +155,9 @@ pub fn run(
   parser: Parser(a, tok, ctx),
 ) -> Result(a, List(DeadEnd(tok, ctx))) {
   let src =
-    list.index_fold(
-      src,
-      dict.new(),
-      fn(dict, tok, idx) { dict.insert(dict, idx, tok) },
-    )
+    list.index_fold(src, dict.new(), fn(dict, tok, idx) {
+      dict.insert(dict, idx, tok)
+    })
   let init = State(src, 0, Span(1, 1, 1, 1), [])
 
   case runwrap(init, parser) {
@@ -531,7 +529,7 @@ pub fn take_if(
         CanBacktrack(False),
         bag_from_state(state, Expected(expecting, got: tok)),
       )
-    None, _ -> Fail(CanBacktrack(False), bag_from_state(state, EndOfInput))
+    _, _ -> Fail(CanBacktrack(False), bag_from_state(state, EndOfInput))
   }
 }
 
@@ -548,15 +546,12 @@ pub fn take_while(predicate: fn(tok) -> Bool) -> Parser(List(tok), tok, ctx) {
 
   case tok, option.map(tok, predicate) {
     Some(tok), Some(True) ->
-      runwrap(
-        next_state,
-        {
-          use toks <- do(take_while(predicate))
-          return([tok, ..toks])
-        },
-      )
+      runwrap(next_state, {
+        use toks <- do(take_while(predicate))
+        return([tok, ..toks])
+      })
     Some(_), Some(False) -> Cont(CanBacktrack(False), [], state)
-    None, _ -> Cont(CanBacktrack(False), [], state)
+    _, _ -> Cont(CanBacktrack(False), [], state)
   }
 }
 

@@ -26,47 +26,47 @@ type TokenT {
 // TESTS -----------------------------------------------------------------------
 
 pub fn empty_env_test() {
-  use test <- should("parse an empty env")
+  use run <- should("parse an empty env")
   let input = ""
   let expected = dict.new()
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn single_env_test() {
-  use test <- should("parse a single k/v pair")
+  use run <- should("parse a single k/v pair")
   let input = "FOO=bar"
   let expected = dict.from_list([#("FOO", "bar")])
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn single_env_string_test() {
-  use test <- should("parse a single k/v pair with a string value")
+  use run <- should("parse a single k/v pair with a string value")
   let input = "FOO='bar'"
   let expected = dict.from_list([#("FOO", "bar")])
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn single_env_number_test() {
-  use test <- should("parse a single k/v pair with a number value")
+  use run <- should("parse a single k/v pair with a number value")
   let input = "FOO=123"
   let expected = dict.from_list([#("FOO", "123")])
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn single_env_float_test() {
-  use test <- should("parse a single k/v pair with a float value")
+  use run <- should("parse a single k/v pair with a float value")
   let input = "FOO=123.456"
   let expected = dict.from_list([#("FOO", "123.456")])
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn multi_env_test() {
-  use test <- should("parse multiple k/v pairs")
+  use run <- should("parse multiple k/v pairs")
   let input =
     "
     FOO=bar
@@ -74,7 +74,7 @@ pub fn multi_env_test() {
     "
   let expected = dict.from_list([#("FOO", "bar"), #("BAZ", "qux")])
 
-  test(input, expected)
+  run(input, expected)
 }
 
 // UTILS -----------------------------------------------------------------------

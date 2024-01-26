@@ -1,6 +1,5 @@
 // IMPORTS ---------------------------------------------------------------------
 
-import gleam
 import gleam/io
 import gleam/int
 import gleam/function
@@ -42,109 +41,109 @@ type Context {
 // LITERAL TESTS ---------------------------------------------------------------
 
 pub fn json_null_test() {
-  use test <- should("parse a JSON null")
+  use run <- should("parse a JSON null")
   let input = "null"
   let expected = Null
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn json_true_test() {
-  use test <- should("parse a JSON true")
+  use run <- should("parse a JSON true")
   let input = "true"
   let expected = True
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn json_false_test() {
-  use test <- should("parse a JSON false")
+  use run <- should("parse a JSON false")
   let input = "false"
   let expected = False
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn json_number_test() {
-  use test <- should("parse a JSON number")
+  use run <- should("parse a JSON number")
   let input = "123.456"
   let expected = Number(123.456)
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn json_string_test() {
-  use test <- should("parse a JSON string")
+  use run <- should("parse a JSON string")
   let input = "\"hello world\""
   let expected = String("hello world")
 
-  test(input, expected)
+  run(input, expected)
 }
 
 // ARRAY TESTS -----------------------------------------------------------------
 
 pub fn json_empty_array_test() {
-  use test <- should("parse an empty JSON array")
+  use run <- should("parse an empty JSON array")
   let input = "[]"
   let expected = Array([])
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn json_singleton_array_test() {
-  use test <- should("parse a JSON array with one element")
+  use run <- should("parse a JSON array with one element")
   let input = "[1]"
   let expected = Array([Number(1.0)])
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn json_array_test() {
-  use test <- should("parse a JSON array with multiple elements")
+  use run <- should("parse a JSON array with multiple elements")
   let input = "[1, 2, 3]"
   let expected = Array([Number(1.0), Number(2.0), Number(3.0)])
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn json_nested_array_test() {
-  use test <- should("parse a nested JSON array")
+  use run <- should("parse a nested JSON array")
   let input = "[1, [2, 3], 4]"
   let expected =
     Array([Number(1.0), Array([Number(2.0), Number(3.0)]), Number(4.0)])
 
-  test(input, expected)
+  run(input, expected)
 }
 
 // OBJECT TESTS ----------------------------------------------------------------
 
 pub fn json_empty_object_test() {
-  use test <- should("parse an empty JSON object")
+  use run <- should("parse an empty JSON object")
   let input = "{}"
   let expected = Object([])
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn json_singleton_object_test() {
-  use test <- should("parse a JSON object with one element")
+  use run <- should("parse a JSON object with one element")
   let input = "{\"a\": 1}"
   let expected = Object([#("a", Number(1.0))])
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn json_object_test() {
-  use test <- should("parse a JSON object with multiple elements")
+  use run <- should("parse a JSON object with multiple elements")
   let input = "{\"a\": 1, \"b\": 2, \"c\": 3}"
   let expected =
     Object([#("a", Number(1.0)), #("b", Number(2.0)), #("c", Number(3.0))])
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn json_nested_object_test() {
-  use test <- should("parse a nested JSON object")
+  use run <- should("parse a nested JSON object")
   let input = "{\"a\": 1, \"b\": {\"c\": 2}, \"d\": 3}"
   let expected =
     Object([
@@ -153,14 +152,14 @@ pub fn json_nested_object_test() {
       #("d", Number(3.0)),
     ])
 
-  test(input, expected)
+  run(input, expected)
 }
 
 // REAL WORLD TESTS ------------------------------------------------------------
 
 pub fn json_schema_basic_test() {
   // https://json-schema.org/learn/miscellaneous-examples.html#basic
-  use test <- should("parse the JSON Schema basic example")
+  use run <- should("parse the JSON Schema basic example")
   let input =
     "{
   \"$id\": \"https://example.com/person.schema.json\",
@@ -223,12 +222,12 @@ pub fn json_schema_basic_test() {
       ),
     ])
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn json_scheme_arrays_of_things_test() {
   // https://json-schema.org/learn/miscellaneous-examples.html#arrays-of-things
-  use test <- should("parse the JSON Schema 'arrays of things' example")
+  use run <- should("parse the JSON Schema 'arrays of things' example")
   let input =
     "{
   \"$id\": \"https://example.com/arrays.schema.json\",
@@ -325,7 +324,7 @@ pub fn json_scheme_arrays_of_things_test() {
       ),
     ])
 
-  test(input, expected)
+  run(input, expected)
 }
 
 // UTILS -----------------------------------------------------------------------
@@ -397,14 +396,16 @@ fn object_parser() -> Parser(Json, JsonT, Context) {
 }
 
 fn object_element_parser() -> Parser(#(String, Json), JsonT, Context) {
-  use key <- nibble.do(nibble.backtrackable({
-    use t <- nibble.do(nibble.any())
+  use key <- nibble.do(
+    nibble.backtrackable({
+      use t <- nibble.do(nibble.any())
 
-    case t {
-      StrT(s) -> nibble.return(s)
-      _ -> nibble.fail("Expected string object key")
-    }
-  }))
+      case t {
+        StrT(s) -> nibble.return(s)
+        _ -> nibble.fail("Expected string object key")
+      }
+    }),
+  )
   use _ <- nibble.do(nibble.token(Colon))
   use value <- nibble.do(nibble.lazy(parser))
 

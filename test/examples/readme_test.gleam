@@ -1,6 +1,5 @@
 // IMPORTS ---------------------------------------------------------------------
 
-import gleam
 import gleam/io
 import gleam/option.{None, Some}
 import gleeunit/should
@@ -23,11 +22,11 @@ type T {
 // TESTS -----------------------------------------------------------------------
 
 pub fn readme_test() {
-  use test <- should("parse the example in README.md")
+  use run <- should("parse the example in README.md")
   let input = "(1, 2)"
   let expected = Point(1, 2)
 
-  test(input, expected)
+  run(input, expected)
 }
 
 // UTILS -----------------------------------------------------------------------

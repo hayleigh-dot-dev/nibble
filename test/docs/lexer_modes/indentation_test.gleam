@@ -32,7 +32,7 @@ type TokenT {
 // TESTS -----------------------------------------------------------------------
 
 pub fn indentation_test() {
-  use test <- should("parse indent and dedent tokens")
+  use run <- should("parse indent and dedent tokens")
   let input =
     "def wibble arr
   for x in arr
@@ -67,7 +67,7 @@ def wobble
     Token(Span(8, 17, 9, 1), "\n", Dedent(0)),
   ]
 
-  test(input, expected)
+  run(input, expected)
 }
 
 // UTILS -----------------------------------------------------------------------

@@ -31,89 +31,87 @@ type DeadEnd =
 // TESTS -----------------------------------------------------------------------
 
 pub fn add_test() {
-  use test <- should("add two numbers")
+  use run <- should("add two numbers")
   let input = "1 + 2"
   let expected = 3.0
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn multi_add_test() {
-  use test <- should("add multiple numbers")
+  use run <- should("add multiple numbers")
   let input = "1 + 2 + 3"
   let expected = 6.0
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn sub_test() {
-  use test <- should("subtract two numbers")
+  use run <- should("subtract two numbers")
   let input = "3 - 2"
   let expected = 1.0
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn multi_sub_test() {
-  use test <- should("subtract multiple numbers")
+  use run <- should("subtract multiple numbers")
   let input = "3 - 2 - 1"
   let expected = 0.0
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn mul_test() {
-  use test <- should("multiply two numbers")
+  use run <- should("multiply two numbers")
   let input = "2 * 3"
   let expected = 6.0
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn multi_mul_test() {
-  use test <- should("multiply multiple numbers")
+  use run <- should("multiply multiple numbers")
   let input = "2 * 3 * 4"
   let expected = 24.0
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn precedence_test() {
-  use test <- should("evaluate operators according to precedence")
+  use run <- should("evaluate operators according to precedence")
   let input = "2 * 3 + 4"
   let expected = 10.0
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn parens_test() {
-  use test <- should("evaluate parens first")
+  use run <- should("evaluate parens first")
   let input = "2 * (3 + 4)"
   let expected = 14.0
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn complex_test() {
-  use test <- should("evaluate complex expressions")
+  use run <- should("evaluate complex expressions")
   let input = "2 * (3 + 4) / 2 - 1"
   let expected = 6.0
 
-  test(input, expected)
+  run(input, expected)
 }
 
 pub fn mismatched_parens_test() {
-  use test <- should_error("on mismatched parens")
+  use run <- should_error("on mismatched parens")
   let input = "2 * (3 + 4"
   let expected = [
-    nibble.DeadEnd(
-      lexer.Span(1, 10, 1, 11),
-      nibble.EndOfInput,
-      [#(lexer.Span(1, 5, 1, 6), InSubExpr)],
-    ),
+    nibble.DeadEnd(lexer.Span(1, 10, 1, 11), nibble.EndOfInput, [
+      #(lexer.Span(1, 5, 1, 6), InSubExpr),
+    ]),
   ]
 
-  test(input, expected)
+  run(input, expected)
 }
 
 // UTILS -----------------------------------------------------------------------
