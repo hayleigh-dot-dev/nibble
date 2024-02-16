@@ -282,15 +282,15 @@ pub fn lazy(parser: fn() -> Parser(a, tok, ctx)) -> Parser(a, tok, ctx) {
 /// one token. Passing a parser to `backtrackable` will change this behaviour and
 /// allows us to jump back to the state of the parser before it consumed any input
 /// and try another one.
-/// 
+///
 /// This is most useful when you want to quickly try a few different parsers using
 /// [`one_of`](#one_of).
-/// 
+///
 /// 🚨 Backtracing parsers can drastically reduce performance, so you should avoid
 /// them where possible. A common reason folks reach for backtracking is when they
 /// want to try multiple branches that start with the same token or same sequence
 /// of tokens.
-/// 
+///
 /// To avoid backtracking in these cases, you can create an intermediate parser
 /// that consumes the common tokens _and then_ use [`one_of`](#one_of) to try
 /// the different branches.
@@ -363,6 +363,16 @@ pub fn map(parser: Parser(a, tok, ctx), f: fn(a) -> b) -> Parser(b, tok, ctx) {
 ///
 pub fn replace(parser: Parser(a, tok, ctx), with b: b) -> Parser(b, tok, ctx) {
   map(parser, fn(_) { b })
+}
+
+// PARSER STATE ----------------------------------------------------------------
+
+/// A parser that returns the current token position.
+///
+pub fn span() -> Parser(Span, tok, ctx) {
+  use state <- Parser
+
+  Cont(CanBacktrack(True), state.pos, state)
 }
 
 // SIMPLE PARSERS --------------------------------------------------------------
@@ -608,7 +618,7 @@ pub fn take_up_to(
 }
 
 ///
-/// 
+///
 pub fn take_at_least(
   parser: Parser(a, tok, ctx),
   count: Int,
@@ -625,7 +635,7 @@ pub fn take_at_least(
 }
 
 ///
-/// 
+///
 pub fn take_exactly(
   parser: Parser(a, tok, ctx),
   count: Int,
@@ -648,7 +658,7 @@ pub fn or(parser: Parser(a, tok, ctx), default: a) -> Parser(a, tok, ctx) {
   one_of([parser, return(default)])
 }
 
-/// Try the given parser, but if it fails return 
+/// Try the given parser, but if it fails return
 /// [`None`](#https://hexdocs.pm/gleam_stdlib/gleam/option.html#Option) instead
 /// of failing.
 ///
@@ -678,7 +688,7 @@ pub fn take_map(
   }
 }
 
-/// 
+///
 ///
 pub fn take_map_while(f: fn(tok) -> Option(a)) -> Parser(List(a), tok, ctx) {
   use state <- Parser
@@ -697,7 +707,7 @@ pub fn take_map_while(f: fn(tok) -> Option(a)) -> Parser(List(a), tok, ctx) {
 }
 
 ///
-/// 
+///
 /// 💡 If this parser succeeds, the list produced is guaranteed to be non-empty.
 /// Feel free to `let assert` the result!
 ///
@@ -789,7 +799,7 @@ fn pop_context(state: State(tok, ctx)) -> State(tok, ctx) {
   }
 }
 
-/// Run the given parser and then inspect it's state. 
+/// Run the given parser and then inspect it's state.
 pub fn inspect(
   parser: Parser(a, tok, ctx),
   message: String,
