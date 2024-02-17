@@ -372,7 +372,7 @@ pub fn replace(parser: Parser(a, tok, ctx), with b: b) -> Parser(b, tok, ctx) {
 pub fn span() -> Parser(Span, tok, ctx) {
   use state <- Parser
 
-  Cont(CanBacktrack(True), state.pos, state)
+  Cont(CanBacktrack(False), state.pos, state)
 }
 
 // SIMPLE PARSERS --------------------------------------------------------------
