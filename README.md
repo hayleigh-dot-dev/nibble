@@ -14,7 +14,7 @@ If you just want to get a feel for what nibble can do, check out the example
 below.
 
 ```gleam
-import gleam/option.{Some, None}
+import gleam/option.{None, Some}
 import nibble.{do, return}
 import nibble/lexer
 
@@ -35,38 +35,38 @@ pub fn main() {
   // type of token you want to use, but nibble will wrap
   // that up in its own `Token` type that includes the
   // source span and original lexeme for each token.
-  let lexer = lexer.simple([
-    lexer.int(Num),
-    lexer.token("(", LParen),
-    lexer.token(")", RParen),
-    lexer.token(",", Comma),
-    // Skip over whitespace, we don't care about it!
-    lexer.whitespace(Nil)
-    |> lexer.ignore
-  ])
+  let lexer =
+    lexer.simple([
+      lexer.int(Num),
+      lexer.token("(", LParen),
+      lexer.token(")", RParen),
+      lexer.token(",", Comma),
+      // Skip over whitespace, we don't care about it!
+        lexer.whitespace(Nil)
+        |> lexer.ignore,
+    ])
 
   // Your parser(s!) know how to transform a list of
   // tokens into whatever you want. You have the full
   // power of Gleam here, so you can go wild!
-  let parser = {
-    use _ <- do(nibble.token(LParen))
-    use x <- do(int_parser())
-    use _ <- do(nibble.token(Comma))
-    use y <- do(int_parser())
-    use _ <- do(nibble.token(RParen))
-
-    return(Point(x, y))
-  }
-
   let int_parser = {
     // Use `take_map` to only consume certain kinds of tokens and transform the
     // result.
-    use tok <- nibble.take_map
-
+    use tok <- nibble.take_map("expected number")
     case tok {
       Num(n) -> Some(n)
       _ -> None
     }
+  }
+
+  let parser = {
+    use _ <- do(nibble.token(LParen))
+    use x <- do(int_parser)
+    use _ <- do(nibble.token(Comma))
+    use y <- do(int_parser)
+    use _ <- do(nibble.token(RParen))
+
+    return(Point(x, y))
   }
 
   let assert Ok(tokens) = lexer.run("(1, 2)", lexer)
@@ -75,6 +75,7 @@ pub fn main() {
   point.x //=> 1
   point.y //=> 2
 }
+
 ```
 
 ## Installation
