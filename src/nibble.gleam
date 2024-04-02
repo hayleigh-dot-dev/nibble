@@ -11,7 +11,7 @@
 ////  const orderFunctions = [
 ////    { names: ['run', 'return', 'succeed', 'fail', 'throw'] },
 ////    { heading: 'Basics', names: ['token', 'any', 'eof', 'lazy'] },
-////    { heading: 'Pipelines', names: ['succeed', 'fail', 'then', 'dict', 'replace', 'in'] },
+////    { heading: 'Pipelines', names: ['succeed', 'fail', 'then', 'replace', 'in'] },
 ////    { heading: 'With <code>use</code>', names: ['return', 'throw', 'do', 'do_in'] },
 ////    { heading: 'Predicates', names: ['take_if', 'take_while', 'take_while1', 'take_until', 'take_until1', 'take_map', 'take_map_while', 'take_map_while1'] },
 ////    { heading: 'Transforms', names: ['take_map', 'take_map_while', 'take_map_while1'] },
