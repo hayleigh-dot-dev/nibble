@@ -16,7 +16,7 @@ below.
 ```gleam
 import gleam/option.{Some, None}
 import nibble.{do, return}
-import nibbler/lexer
+import nibble/lexer
 
 type Point {
   Point(x: Int, y: Int)
