@@ -1,3 +1,17 @@
+//// Nibble takes a different approach to many other parser combinator libraries
+//// by also providing a _lexer_ combinator module that you use to turn an input
+//// string into a list of tokens.
+////
+//// Parser combinators are a powerful and flexible way to build parsers, but
+//// they offer come at a performance cost compared to hand-written parsers or
+//// parser generators. On the other hand, writing a lexer by hand can be a bit
+//// tedious and difficult.
+////
+//// Nibble aims to provide a happy middle-ground by making it easy to produce
+//// OK-performing lexers and then use parser combinators that can be much faster
+//// working on the smaller token stream.
+////
+
 // IMPORTS ---------------------------------------------------------------------
 
 import gleam/float
@@ -11,25 +25,54 @@ import gleam/string
 
 // TYPES -----------------------------------------------------------------------
 
+/// A `Matcher` is how we define the rules that match parts of the input string
+/// and turn them into tokens. At it's core, a `Match` is a function that takes
+/// three arguments:
 ///
+/// - The current mode of the lexer
+///
+/// - Any input we've accumulated so far
+///
+/// - A lookahead of one grapheme
+///
+/// With just these three arguments we can define arbitrary rules for consuming
+/// (or not) input and producing tokens!
 ///
 pub opaque type Matcher(a, mode) {
   Matcher(run: fn(mode, String, String) -> Match(a, mode))
 }
 
+/// When writing a custom matcher, a `Match` is what you return to tell the lexer
+/// what to do next.
+///
 pub type Match(a, mode) {
+  /// Consume the accumulated input and produce a token with the given value. A
+  /// `Keep` match can also transition the lexer into a new mode.
   Keep(a, mode)
+  /// Skip running any additional matchers this iteration, add the next grapheme
+  /// to the accumulated input, and run the next iteration.
   Skip
+  /// Drop the accumulated input and move on to the next iteration. A `Drop`
+  /// match can also transition the lexer into a new mode. This match is useful
+  /// for discarding input like whitespace or comments.
   Drop(mode)
+  /// The matcher did not match the input, so the lexer should try the next
+  /// matcher in the list (or fail if there are no more matchers).
   NoMatch
 }
 
-///
+/// You use Nibble's lexer to turn a string into a list of tokens that your parser
+/// will eventually consume. The `Token` type contains the lexeme that was consumed
+/// (aka the raw input string), the source [`Span`](#Span) of the consumed lexeme
+/// to locate it in the source, and whatever token value your lexer produces.
 ///
 pub type Token(a) {
   Token(span: Span, lexeme: String, value: a)
 }
 
+/// A source span is a range into the source string that represents the start and
+/// end of a lexeme in a human-readable way. That means instead of a straight index
+/// into the string you get a row and column for the start and end instead!
 ///
 ///
 pub type Span {
@@ -66,7 +109,9 @@ pub fn simple(matchers: List(Matcher(a, Nil))) -> Lexer(a, Nil) {
   Lexer(fn(_) { matchers })
 }
 
-///
+/// An `advanced` lexer is one that can change what matchers it uses based on the
+/// current mode. This is useful for sophisticated lexers that might need to
+/// handle things like interpolated strings or indentation-sensitive syntax.
 ///
 pub fn advanced(matchers: fn(mode) -> List(Matcher(a, mode))) -> Lexer(a, mode) {
   Lexer(fn(mode) { matchers(mode) })
@@ -74,7 +119,13 @@ pub fn advanced(matchers: fn(mode) -> List(Matcher(a, mode))) -> Lexer(a, mode) 
 
 // MATCHER CONSTRUCTORS --------------------------------------------------------
 
+/// Create a custom [`Matcher`](#Matcher) that will consume the input and produce
+/// a token with the given value if it is `Ok` or return a `NoMatch` if it fails.
+/// The first parameter is a function that takes the current lexeme and the
+/// second parameter is a one-grapheme lookahead.
 ///
+/// Matchers created with this convienence function cannot change the lexer's
+/// mode or skip ahead to the next iteration without consuming the input.
 ///
 pub fn keep(f: fn(String, String) -> Result(a, Nil)) -> Matcher(a, mode) {
   use mode, lexeme, lookahead <- Matcher
@@ -84,7 +135,13 @@ pub fn keep(f: fn(String, String) -> Result(a, Nil)) -> Matcher(a, mode) {
   |> result.unwrap(NoMatch)
 }
 
+/// Create a custom [`Matcher`](#Matcher) that will consume the input and move
+/// to the next iteration without producing a token if it is `True` or return a
+/// `NoMatch` if it fails. The first parameter is a function that takes the
+/// current lexeme and the second parameter is a one-grapheme lookahead.
 ///
+/// Matchers created with this convienence function cannot change the lexer's
+/// mode or skip ahead to the next iteration without consuming the input.
 ///
 pub fn drop(f: fn(String, String) -> Bool) -> Matcher(a, mode) {
   use mode, lexeme, lookahead <- Matcher
@@ -95,26 +152,18 @@ pub fn drop(f: fn(String, String) -> Bool) -> Matcher(a, mode) {
   }
 }
 
+/// Create a custom [`Matcher`](#Matcher) that is flexible enough to do anything
+/// you want! The first parameter is a function that takes the current lexer mode,
+/// the current lexeme, and a one-grapheme lookahead.
 ///
-///
-pub fn skip(matcher: Matcher(a, mode)) -> Matcher(b, mode) {
-  use mode, lexeme, lookahead <- Matcher
-
-  case matcher.run(mode, lexeme, lookahead) {
-    Keep(_, _) -> Skip
-    Skip -> Skip
-    Drop(_) -> Skip
-    NoMatch -> NoMatch
-  }
-}
-
-///
+/// The function returns a [`Match`](#Match) that tells the lexer what to do next.
 ///
 pub fn custom(f: fn(mode, String, String) -> Match(a, mode)) -> Matcher(a, mode) {
   Matcher(f)
 }
 
-///
+/// Take an existing matcher and transform it by applying a function to the value
+/// it produces.
 ///
 pub fn map(matcher: Matcher(a, mode), f: fn(a) -> b) -> Matcher(b, mode) {
   use mode, lexeme, lookahead <- Matcher
@@ -127,7 +176,10 @@ pub fn map(matcher: Matcher(a, mode), f: fn(a) -> b) -> Matcher(b, mode) {
   }
 }
 
-///
+/// Take an existing matcher and transform it by applying a function to the value
+/// it producs. The function you provide can return a different [`Match`](#Match)
+/// so you can, for example, take a matcher that `Keep`s a value and turn it into
+/// a matcher that `Drop`s the value instead. This is out [`ignore`](#ignore) works!
 ///
 pub fn then(
   matcher: Matcher(a, mode),
@@ -143,6 +195,8 @@ pub fn then(
   }
 }
 
+/// Take an existing matcher and transition to a new mode. This only runs if
+/// the matcher is successful and either `Keep`s or `Drop`s a value.
 ///
 ///
 pub fn into(matcher: Matcher(a, mode), f: fn(mode) -> mode) -> Matcher(a, mode) {
@@ -156,7 +210,9 @@ pub fn into(matcher: Matcher(a, mode), f: fn(mode) -> mode) -> Matcher(a, mode) 
   }
 }
 
-///
+/// Take a matcher than might `Keep` anything and silently `Drop` anything it
+/// produces instead. This is useful for things like whitespace or comments
+/// where you want to consume some input but you don't want to emit a token.
 ///
 pub fn ignore(matcher: Matcher(a, mode)) -> Matcher(b, mode) {
   use mode, lexeme, lookahead <- Matcher
@@ -171,7 +227,7 @@ pub fn ignore(matcher: Matcher(a, mode)) -> Matcher(b, mode) {
 
 // COMMON MATCHERS -------------------------------------------------------------
 
-///
+/// Match exactly the given string with no lookahead and produce the given value.
 ///
 pub fn token(str: String, value: a) -> Matcher(a, mode) {
   use mode, lexeme, _ <- Matcher
@@ -182,7 +238,9 @@ pub fn token(str: String, value: a) -> Matcher(a, mode) {
   }
 }
 
-///
+/// Match exactly the given string only when the lookahead is matched by the given
+/// breaker _regex_. This is an alias of [`keyword`](#keyword) but it can be
+/// helpful to separate the two concepts.
 ///
 pub fn symbol(str: String, breaker: String, value: a) -> Matcher(a, mode) {
   let assert Ok(break) = regex.from_string(breaker)
@@ -195,7 +253,10 @@ pub fn symbol(str: String, breaker: String, value: a) -> Matcher(a, mode) {
   }
 }
 
-///
+/// Match exactly the given string only when the lookahead is matched by the given
+/// breaker _regex_. Keywords are exact strings like `let` but you wouldn't want
+/// to lex `letter` as `[Let, Var("tter")]` so the breaker is used so you can say
+/// what characters should trigger a match.
 ///
 pub fn keyword(str: String, breaker: String, value: a) -> Matcher(a, mode) {
   let assert Ok(break) = regex.from_string(breaker)
@@ -478,7 +539,7 @@ fn do_run(
   let matchers = lexer.matchers(mode)
 
   case state.source, state.current {
-    // If we're at the end of the source and there's no lexeme left to match, 
+    // If we're at the end of the source and there's no lexeme left to match,
     // we're done!
     //
     // We have to remember to reverse the list of tokens because we've been building
@@ -503,7 +564,7 @@ fn do_run(
       }
 
     // When lexing we include a one-grapheme lookahead to help us with things like
-    // matching identifiers or other mode-aware tokens. This just takes the 
+    // matching identifiers or other mode-aware tokens. This just takes the
     // skip grapheme from the source (we call it `lookahead` here) and calls the
     // `do_match` function with it and some other bits.
     [lookahead, ..rest], #(start_row, start_col, lexeme) -> {
