@@ -1,26 +1,124 @@
 ////
+//// <script>document.addEventListener('DOMContentLoaded', () => {
+////  // The following is a naughty script that re-arranges the documentation at
+////  // runtime. Gleam emits functions alphabetically but we prefer a different
+////  // approach that guides the reader through the API from top to bottom.
+////  //
+////  // If JavaScript is disabled then this obviously doesn't run and folks get
+////  // the default alphabetical order instead.
+////
+////  const orderTypes = [ 'Parser', 'Error', 'DeadEnd', 'Loop' ]
+////  const orderFunctions = [
+////    { names: ['run', 'return', 'succeed', 'fail', 'throw'] },
+////    { heading: 'Basics', names: ['token', 'any', 'eof', 'lazy'] },
+////    { heading: 'Pipelines', names: ['succeed', 'fail', 'then', 'replace', 'in'] },
+////    { heading: 'With <code>use</code>', names: ['return', 'throw', 'do', 'do_in'] },
+////    { heading: 'Predicates', names: ['take_if', 'take_while', 'take_while1', 'take_until', 'take_until1', 'take_map', 'take_map_while', 'take_map_while1'] },
+////    { heading: 'Transforms', names: ['take_map', 'take_map_while', 'take_map_while1'] },
+////    { heading: 'Branching', names: ['one_of', 'optional', 'or'] },
+////    { heading: 'Looping', names: ['many', 'many1', 'sequence', 'loop'] },
+////    { heading: 'Backtracking', names: ['backtrackable', 'commit'] },
+////    { heading: 'Debugging', names: ['inspect'] }
+////  ]
+////
+////  const sidebarFunctionsList =
+////    [...document.querySelectorAll('h2')]
+////      .find(h2 => h2.innerText === 'Functions')
+////      .nextElementSibling
+////
+////  const sidebarFunctions =
+////    Array.from(sidebarFunctionsList.children)
+////      .reduce((obj, li) => {
+////        li.remove()
+////        return { ...obj, [li.innerText]: li }
+////      }, {})
+////
+////
+////  for (const { heading, names } of orderFunctions) {
+////    if (heading) {
+////      sidebarFunctionsList.appendChild(
+////        Object.assign(document.createElement('h3'), {
+////          innerHTML: heading,
+////        })
+////      )
+////    }
+////
+////    for (const name of names) {
+////      sidebarFunctionsList.appendChild(sidebarFunctions[name])
+////    }
+////  }
+////
+////  const docsFunctionsList = document.querySelector('section:has(h1#module-functions)')
+////  const docsFunctions =
+////    Array.from(docsFunctionsList.querySelectorAll('div.member'))
+////      .reduce((obj, div) => {
+////        div.remove()
+////        return { ...obj, [div.querySelector('div.member-name h2').innerText.trim()]: div }
+////      }, {})
+////
+////  for (const { heading, names } of orderFunctions) {
+////    if (heading) {
+////      docsFunctionsList.appendChild(
+////        Object.assign(document.createElement('h3'), {
+////          className: 'module-member-kind',
+////          innerHTML: heading,
+////        })
+////      )
+////    }
+////
+////    for (const name of names) {
+////      docsFunctionsList.appendChild(docsFunctions[name])
+////    }
+////  }
+//// })</script>
+////
 
 // IMPORTS ---------------------------------------------------------------------
 
 import gleam/bool
-import gleam/float
 import gleam/function
-import gleam/int
 import gleam/io
+import gleam/string
 import gleam/list
 import gleam/dict.{type Dict}
-import gleam/option.{type Option}
-import gleam/string
-import nibble/predicates
+import gleam/option.{type Option, None, Some}
+import nibble/lexer.{type Span, type Token, Span, Token}
 
 // TYPES -----------------------------------------------------------------------
 
+/// The `Parser` type has three paramteres, let's take a look at each of them:
 ///
-pub opaque type Parser(a, ctx) {
-  Parser(fn(State(ctx)) -> Step(a, ctx))
+/// ```
+/// Parser(a, tok, ctx)
+/// // (1) ^
+/// // (2)    ^^^
+/// // (3)         ^^^
+/// ```
+///
+/// 1) `a` is the type of value that the parser knows how to produce. If you were
+///   writing a parser for a programming language, this might be your expression
+///   type.
+///
+/// 2) `tok` is the type of tokens that the parser knows how to consume. You can
+///   take a look at the [`Token`](./nibble/lexer#Token) type for a bit more info,
+///   but note that it's not necessary for the token stream to come from nibble's
+///   lexer.
+///
+/// 3) `ctx` is used to make error reporting nicer. You can place a parser into a
+///   custom context. When the parser runs the context gets pushed into a stack.
+///   If the parser fails you can see the context stack in the error message,
+///   which can make error reporting and debugging much easier!
+///
+pub opaque type Parser(a, tok, ctx) {
+  Parser(fn(State(tok, ctx)) -> Step(a, tok, ctx))
 }
 
-type State(ctx) {
+type Step(a, tok, ctx) {
+  Cont(CanBacktrack, a, State(tok, ctx))
+  Fail(CanBacktrack, Bag(tok, ctx))
+}
+
+type State(tok, ctx) {
   State(
     // The Gleam stdlib doesn't seem to have an `Array` type, so we'll just
     // use a `Dict` instead. We only need something for indexed access, to it's
@@ -28,327 +126,375 @@ type State(ctx) {
     //
     // TODO: Louis says making an `Array` backed by tuples in Erlang will
     // be way better for performance. In JavaScript we could just use normal
-    // arrays - someone should look into this. 
-    src: Dict(Int, String),
-    offset: Int,
-    context: List(Located(ctx)),
-    row: Int,
-    col: Int,
+    // arrays - someone should look into this.
+    //
+    // ❓ You might wonder why we're wanting an `Array` at all when we could just
+    // use a `List` and backtrack to a previous state when we need to. By tracking
+    // the index and indexing into the dict/array directly we save ever having to
+    // allocate something new, which is a big deal for performance!
+    src: Dict(Int, Token(tok)),
+    idx: Int,
+    pos: Span,
+    ctx: List(#(Span, ctx)),
   )
 }
 
-type Step(a, ctx) {
-  Cont(Backtrackable, a, State(ctx))
-  Fail(Backtrackable, Bag(ctx))
-}
-
-///
-pub type Located(ctx) {
-  Located(row: Int, col: Int, context: ctx)
-}
-
-type Backtrackable {
-  Commit
-  Backtrack
+type CanBacktrack {
+  CanBacktrack(Bool)
 }
 
 // RUNNING PARSERS -------------------------------------------------------------
 
+/// Parsers don't do anything until they're run! The `run` function takes a
+/// [`Parser`](#Parser) and a list of [`Token`](./nibble/lexer#Token)s and
+/// runs it; returning either the parsed value or a list of [`DeadEnds`](#DeadEnd)
+/// where the parser failed.
 ///
-pub fn run(src: String, parser: Parser(a, ctx)) -> Result(a, List(DeadEnd(ctx))) {
-  let graphemes =
-    string.to_graphemes(src)
-    |> list.index_map(fn(grapheme, i) { #(i, grapheme) })
-    |> dict.from_list
-
-  let init = State(graphemes, 0, [], 1, 1)
+pub fn run(
+  src: List(Token(tok)),
+  parser: Parser(a, tok, ctx),
+) -> Result(a, List(DeadEnd(tok, ctx))) {
+  let src =
+    list.index_fold(src, dict.new(), fn(dict, tok, idx) {
+      dict.insert(dict, idx, tok)
+    })
+  let init = State(src, 0, Span(1, 1, 1, 1), [])
 
   case runwrap(init, parser) {
     Cont(_, a, _) -> Ok(a)
-
     Fail(_, bag) -> Error(to_deadends(bag, []))
   }
 }
 
-fn runwrap(state: State(ctx), parser: Parser(a, ctx)) -> Step(a, ctx) {
+fn runwrap(
+  state: State(tok, ctx),
+  parser: Parser(a, tok, ctx),
+) -> Step(a, tok, ctx) {
   let Parser(parse) = parser
   parse(state)
 }
 
-fn next(state: State(ctx)) -> #(Option(String), State(ctx)) {
-  case dict.get(state.src, state.offset) {
-    Ok("\n") -> #(
-      option.Some("\n"),
-      State(..state, offset: state.offset + 1, col: 1, row: state.row + 1),
-    )
-
-    Ok(g) -> #(
-      option.Some(g),
-      State(..state, offset: state.offset + 1, col: state.col + 1),
-    )
-
+fn next(state: State(tok, ctx)) -> #(Option(tok), State(tok, ctx)) {
+  case dict.get(state.src, state.idx) {
     Error(_) -> #(option.None, state)
+    Ok(Token(span, _, tok)) -> #(
+      option.Some(tok),
+      State(..state, idx: state.idx + 1, pos: span),
+    )
   }
 }
 
 // CONSTRUCTORS ----------------------------------------------------------------
 
+/// The simplest kind of parser. [`return`](#return) consumes no tokens and always
+/// produces the given value. Sometimes called [`succeed`](#succeed) instead.
 ///
-pub fn succeed(a: a) -> Parser(a, ctx) {
-  Parser(fn(state) { Cont(Backtrack, a, state) })
+/// This function might seem useless at first, but it is very useful when used in
+/// combination with [`do`](#do) or [`then`](#then).
+///
+/// ```gleam
+/// import nibble.{do, return}
+///
+/// fn unit8_parser() {
+///   use int <- do(int_parser())
+///
+///   case int >= 0, int <= 255 {
+///     True, True ->
+///       return(int)
+///
+///     False, _ ->
+///       throw("Expected an int >= 0")
+///
+///     _, False ->
+///       throw("Expected an int <= 255")
+///  }
+/// }
+/// ```
+///
+/// 💡 [`return`](#return`) and [`succeed`](#succeed) are names for the same thing.
+/// We suggesting using `return` unqualified when using `do` and Gleam's `use`
+/// syntax, and `nibble.succeed` in a pipeline with `nibble.then`.
+pub fn return(value: a) -> Parser(a, tok, ctx) {
+  use state <- Parser
+
+  Cont(CanBacktrack(False), value, state)
 }
 
+/// The simplest kind of parser. [`succeed`](#succeed) consumes no tokens and always
+/// produces the given value. Sometimes called [`return`](#return) instead.
 ///
-pub fn fail(message: String) -> Parser(a, ctx) {
-  Parser(fn(state) { Fail(Backtrack, bag_from_state(state, Custom(message))) })
+/// This function might seem useless at first, but it is very useful when used in
+/// combination with [`do`](#do) or [`then`](#then).
+///
+/// ```gleam
+/// import nibble
+///
+/// fn unit8_parser() {
+///   int_parser()
+///   |> nibble.then(fn(int) {
+///     case int >= 0, int <= 255 {
+///       True, True -> succeed(int)
+///       False, _ -> fail("Expected an int >= 0")
+///       _, False -> fail("Expected an int <= 255")
+///     }
+///   })
+/// }
+/// ```
+///
+/// 💡 [`succeed`](#succeed) and [`return`](#return) are names for the same thing.
+/// We suggest using `succeed` in a pipeline with `nibble.then`, and `return`
+/// unqalified when using `do` with Gleam's `use` syntax.
+///
+pub fn succeed(value: a) -> Parser(a, tok, ctx) {
+  return(value)
 }
 
+/// The opposite of [`return`](#return), this parser always fails with the given
+/// message. Sometimes called [`fail`](#fail) instead.
 ///
-pub fn lazy(parser: fn() -> Parser(a, ctx)) -> Parser(a, ctx) {
-  Parser(fn(state) { runwrap(state, parser()) })
+pub fn throw(message: String) -> Parser(a, tok, ctx) {
+  use state <- Parser
+  let error = Custom(message)
+  let bag = bag_from_state(state, error)
+
+  Fail(CanBacktrack(False), bag)
+}
+
+/// Create a parser that consumes no tokens and always fails with the given
+/// error message.
+///
+pub fn fail(message: String) -> Parser(a, tok, ctx) {
+  throw(message)
+}
+
+/// Defer the creation of a parser until it is needed. This is often most useful
+/// when creating a parser that is recursive and is *not* a function.
+///
+pub fn lazy(parser: fn() -> Parser(a, tok, ctx)) -> Parser(a, tok, ctx) {
+  use state <- Parser
+
+  runwrap(state, parser())
 }
 
 // BACKTRACKING ----------------------------------------------------------------
 
+/// By default, parsers will not backtrack if they fail after consuming at least
+/// one token. Passing a parser to `backtrackable` will change this behaviour and
+/// allows us to jump back to the state of the parser before it consumed any input
+/// and try another one.
 ///
-pub fn backtrackable(parser: Parser(a, ctx)) -> Parser(a, ctx) {
-  Parser(fn(state) {
-    case runwrap(state, parser) {
-      Cont(_, a, state) -> Cont(Backtrack, a, state)
-
-      Fail(_, bag) -> Fail(Backtrack, bag)
-    }
-  })
-}
-
+/// This is most useful when you want to quickly try a few different parsers using
+/// [`one_of`](#one_of).
 ///
-pub fn commit(to a: a) -> Parser(a, ctx) {
-  Parser(fn(state) { Cont(Commit, a, state) })
-}
+/// 🚨 Backtracing parsers can drastically reduce performance, so you should avoid
+/// them where possible. A common reason folks reach for backtracking is when they
+/// want to try multiple branches that start with the same token or same sequence
+/// of tokens.
+///
+/// To avoid backtracking in these cases, you can create an intermediate parser
+/// that consumes the common tokens _and then_ use [`one_of`](#one_of) to try
+/// the different branches.
+///
+pub fn backtrackable(parser: Parser(a, tok, ctx)) -> Parser(a, tok, ctx) {
+  use state <- Parser
 
-fn should_commit(to_x: Backtrackable, or to_y: Backtrackable) -> Backtrackable {
-  case to_x, to_y {
-    Commit, _ -> Commit
-
-    _, Commit -> Commit
-
-    _, _ -> Backtrack
+  case runwrap(state, parser) {
+    Cont(_, a, state) -> Cont(CanBacktrack(False), a, state)
+    Fail(_, bag) -> Fail(CanBacktrack(False), bag)
   }
+}
+
+fn should_commit(a: CanBacktrack, or b: CanBacktrack) -> CanBacktrack {
+  let CanBacktrack(a) = a
+  let CanBacktrack(b) = b
+
+  CanBacktrack(a || b)
 }
 
 // MANIPULATING PARSERS --------------------------------------------------------
 
 ///
+///
+pub fn do(
+  parser: Parser(a, tok, ctx),
+  f: fn(a) -> Parser(b, tok, ctx),
+) -> Parser(b, tok, ctx) {
+  use state <- Parser
+
+  case runwrap(state, parser) {
+    Cont(to_a, a, state) ->
+      case runwrap(state, f(a)) {
+        Cont(to_b, b, state) -> Cont(should_commit(to_a, or: to_b), b, state)
+        Fail(to_b, bag) -> Fail(should_commit(to_a, or: to_b), bag)
+      }
+    Fail(can_backtrack, bag) -> Fail(can_backtrack, bag)
+  }
+}
+
+///
+///
+pub fn do_in(
+  context: ctx,
+  parser: Parser(a, tok, ctx),
+  f: fn(a) -> Parser(b, tok, ctx),
+) -> Parser(b, tok, ctx) {
+  do(parser, f)
+  |> in(context)
+}
+
+///
+///
 pub fn then(
-  parser: Parser(a, ctx),
-  f: fn(a) -> Parser(b, ctx),
-) -> Parser(b, ctx) {
-  Parser(fn(state) {
-    case runwrap(state, parser) {
-      Cont(to_a, a, state) ->
-        case runwrap(state, f(a)) {
-          Cont(to_b, b, state) -> Cont(should_commit(to_a, or: to_b), b, state)
-          Fail(to_b, bag) -> Fail(should_commit(to_a, or: to_b), bag)
-        }
-
-      Fail(can_backtrack, bag) -> Fail(can_backtrack, bag)
-    }
-  })
+  parser: Parser(a, tok, ctx),
+  f: fn(a) -> Parser(b, tok, ctx),
+) -> Parser(b, tok, ctx) {
+  do(parser, f)
 }
 
 ///
-pub fn map(parser: Parser(a, ctx), f: fn(a) -> b) -> Parser(b, ctx) {
-  then(parser, fn(a) { succeed(f(a)) })
-}
+///
+pub fn map(parser: Parser(a, tok, ctx), f: fn(a) -> b) -> Parser(b, tok, ctx) {
+  use a <- do(parser)
 
-fn map2(
-  parse_a: Parser(a, ctx),
-  parse_b: Parser(b, ctx),
-  f: fn(a, b) -> c,
-) -> Parser(c, ctx) {
-  then(parse_a, fn(a) { map(parse_b, fn(b) { f(a, b) }) })
+  return(f(a))
 }
 
 ///
-pub fn replace(parser: Parser(a, ctx), with b: b) -> Parser(b, ctx) {
+///
+pub fn replace(parser: Parser(a, tok, ctx), with b: b) -> Parser(b, tok, ctx) {
   map(parser, fn(_) { b })
 }
 
-// PIPE-FRIENDLY HELPERS -------------------------------------------------------
+// PARSER STATE ----------------------------------------------------------------
 
+/// A parser that returns the current token position.
 ///
-pub fn keep(
-  parse_f: Parser(fn(a) -> b, ctx),
-  parse_a: Parser(a, ctx),
-) -> Parser(b, ctx) {
-  map2(parse_f, parse_a, fn(f, a) { f(a) })
-}
+pub fn span() -> Parser(Span, tok, ctx) {
+  use state <- Parser
 
-///
-pub fn drop(parse_a: Parser(a, ctx), parse_x: Parser(x, ctx)) -> Parser(a, ctx) {
-  map2(parse_a, parse_x, fn(a, _) { a })
+  Cont(CanBacktrack(False), state.pos, state)
 }
 
 // SIMPLE PARSERS --------------------------------------------------------------
 
 ///
-pub fn any() -> Parser(String, ctx) {
-  take_if(function.constant(True), "a single grapheme")
+///
+pub fn any() -> Parser(tok, tok, ctx) {
+  take_if("a single token", function.constant(True))
 }
 
 ///
-pub fn eof() -> Parser(Nil, ctx) {
-  Parser(fn(state) {
-    case next(state) {
-      #(option.Some(str), _) ->
-        Fail(Backtrack, bag_from_state(state, Unexpected(str)))
-
-      #(option.None, _) -> Cont(Backtrack, Nil, state)
-    }
-  })
-}
-
-// GRAPHEMES AND STRINGS -------------------------------------------------------
-
 ///
-pub fn grapheme(str: String) -> Parser(Nil, ctx) {
-  take_if(fn(g) { g == str }, str)
-  |> map(function.constant(Nil))
+pub fn token(tok: tok) -> Parser(Nil, tok, ctx) {
+  use state <- Parser
+
+  case next(state) {
+    #(option.Some(t), state) if tok == t -> Cont(CanBacktrack(True), Nil, state)
+    #(option.Some(t), state) ->
+      Fail(
+        CanBacktrack(False),
+        bag_from_state(state, Expected(string.inspect(tok), t)),
+      )
+    #(option.None, state) ->
+      Fail(CanBacktrack(False), bag_from_state(state, EndOfInput))
+  }
 }
 
 ///
-pub fn string(str: String) -> Parser(Nil, ctx) {
-  let graphemes = string.to_graphemes(str)
-
-  Parser(fn(state) {
-    case graphemes {
-      [] -> Fail(Backtrack, bag_from_state(state, BadParser("empty string")))
-
-      [head, ..tail] -> {
-        let parse_each =
-          list.fold(tail, grapheme(head), fn(parse, next) {
-            parse
-            |> drop(grapheme(next))
-          })
-        case runwrap(state, parse_each) {
-          Cont(_, _, state) -> Cont(Commit, Nil, state)
-          Fail(_, bag) -> Fail(Backtrack, bag)
-        }
-      }
-    }
-  })
-}
-
-// NUMBERS ---------------------------------------------------------------------
-
 ///
-pub fn int() -> Parser(Int, ctx) {
-  take_if_and_while(predicates.is_digit, "a digit")
-  // We can make the following assertion because we know our parser will
-  // only consume digits, and is guaranteed to have at least one.
-  |> map(fn(digits) {
-    let assert Ok(int) = int.parse(digits)
-    int
-  })
-}
+pub fn eof() -> Parser(Nil, tok, ctx) {
+  use state <- Parser
 
-///
-pub fn float() -> Parser(Float, ctx) {
-  let make_float_string =
-    function.curry2(fn(x, y) { string.concat([x, ".", y]) })
-
-  succeed(make_float_string)
-  |> keep(take_if_and_while(predicates.is_digit, "a digit"))
-  |> drop(grapheme("."))
-  |> keep(take_if_and_while(predicates.is_digit, "a digit"))
-  // We can make the following assertion because we know our parser will
-  // only consume digits, and is guaranteed to have at least one.
-  |> map(fn(digits) {
-    let assert Ok(float) = float.parse(digits)
-    float
-  })
-}
-
-// WHITESPACE ------------------------------------------------------------------
-
-///
-pub fn spaces() -> Parser(Nil, ctx) {
-  take_while(fn(g) { g == " " })
-  |> map(function.constant(Nil))
-}
-
-///
-pub fn whitespace() -> Parser(Nil, ctx) {
-  take_while(predicates.is_whitespace)
-  |> map(function.constant(Nil))
+  case next(state) {
+    #(option.Some(tok), _) ->
+      Fail(CanBacktrack(False), bag_from_state(state, Unexpected(tok)))
+    #(option.None, _) -> Cont(CanBacktrack(False), Nil, state)
+  }
 }
 
 // BRANCHING AND LOOPING -------------------------------------------------------
 
 ///
-pub fn one_of(parsers: List(Parser(a, ctx))) -> Parser(a, ctx) {
-  Parser(fn(state) {
-    let init = Fail(Backtrack, Empty)
+///
+pub fn one_of(parsers: List(Parser(a, tok, ctx))) -> Parser(a, tok, ctx) {
+  use state <- Parser
+  let init = Fail(CanBacktrack(False), Empty)
 
-    list.fold_until(parsers, init, fn(result, next) {
-      case result {
-        Cont(_, _, _) -> list.Stop(result)
+  use result, next <- list.fold_until(parsers, init)
 
-        Fail(Commit, _) -> list.Stop(result)
-
-        Fail(_, bag) ->
-          runwrap(state, next)
-          |> add_bag_to_step(bag)
-          |> list.Continue
-      }
-    })
-  })
+  case result {
+    Cont(_, _, _) -> list.Stop(result)
+    Fail(CanBacktrack(True), _) -> list.Stop(result)
+    Fail(_, bag) ->
+      runwrap(state, next)
+      |> add_bag_to_step(bag)
+      |> list.Continue
+  }
 }
 
 ///
-pub fn many(
-  parser: Parser(a, ctx),
-  separator: Parser(x, ctx),
-) -> Parser(List(a), ctx) {
+///
+pub fn sequence(
+  parser: Parser(a, tok, ctx),
+  separator sep: Parser(x, tok, ctx),
+) -> Parser(List(a), tok, ctx) {
   one_of([
     parser
-    |> then(more(_, parser, separator)),
-    succeed([]),
+    |> then(more(_, parser, sep)),
+    return([]),
   ])
+}
+
+///
+///
+pub fn many(parser: Parser(a, tok, ctx)) -> Parser(List(a), tok, ctx) {
+  sequence(parser, return(Nil))
+}
+
+///
+///
+pub fn many1(parser: Parser(a, tok, ctx)) -> Parser(List(a), tok, ctx) {
+  use x <- do(parser)
+  use xs <- do(many(parser))
+
+  return([x, ..xs])
 }
 
 fn more(
   x: a,
-  parser: Parser(a, ctx),
-  separator: Parser(x, ctx),
-) -> Parser(List(a), ctx) {
-  loop([x], fn(xs) {
-    one_of([
-      succeed(list.prepend(xs, _))
-      |> drop(separator)
-      |> keep(parser)
-      |> map(Continue),
-      succeed(xs)
-      |> drop(eof())
-      |> map(list.reverse)
-      |> map(Break),
-      succeed(xs)
-      |> map(list.reverse)
-      |> map(Break),
-    ])
-  })
+  parser: Parser(a, tok, ctx),
+  separator: Parser(x, tok, ctx),
+) -> Parser(List(a), tok, ctx) {
+  use xs <- loop([x])
+  // `break` is lazy so we don't reverse `xs` every iteration if we don't need
+  // to.
+  let break = fn() { return(Break(list.reverse(xs))) }
+  let continue = {
+    use _ <- do(separator)
+    use x <- do(parser)
+
+    return(Continue([x, ..xs]))
+  }
+
+  one_of([continue, lazy(break)])
 }
 
+///
+///
 pub type Loop(a, state) {
   Continue(state)
   Break(a)
 }
 
+///
+///
 pub fn loop(
   init: state,
-  step: fn(state) -> Parser(Loop(a, state), ctx),
-) -> Parser(a, ctx) {
-  Parser(fn(state) { loop_help(step, Backtrack, init, state) })
+  step: fn(state) -> Parser(Loop(a, state), tok, ctx),
+) -> Parser(a, tok, ctx) {
+  use state <- Parser
+
+  loop_help(step, CanBacktrack(False), init, state)
 }
 
 fn loop_help(f, commit, loop_state, state) {
@@ -360,10 +506,8 @@ fn loop_help(f, commit, loop_state, state) {
         next_loop_state,
         next_state,
       )
-
     Cont(can_backtrack, Break(result), next_state) ->
       Cont(should_commit(commit, can_backtrack), result, next_state)
-
     Fail(can_backtrack, bag) -> Fail(should_commit(commit, can_backtrack), bag)
   }
 }
@@ -371,100 +515,262 @@ fn loop_help(f, commit, loop_state, state) {
 // PREDICATES ------------------------------------------------------------------
 
 ///
+///
+pub fn guard(cond: Bool, expecting: String) -> Parser(Nil, tok, ctx) {
+  case cond {
+    True -> return(Nil)
+    False -> fail(expecting)
+  }
+}
+
+///
+///
 pub fn take_if(
-  predicate: fn(String) -> Bool,
   expecting: String,
-) -> Parser(String, ctx) {
-  Parser(fn(state) {
-    let #(str, next_state) = next(state)
-    let should_take =
-      str
-      |> option.map(predicate)
-      |> option.unwrap(False)
-    let str = option.unwrap(str, "")
+  predicate: fn(tok) -> Bool,
+) -> Parser(tok, tok, ctx) {
+  use state <- Parser
+  let #(tok, next_state) = next(state)
 
-    case should_take {
-      True -> Cont(Commit, str, next_state)
-
-      False ->
-        Fail(Backtrack, bag_from_state(state, Expected(expecting, got: str)))
-    }
-  })
+  case tok, option.map(tok, predicate) {
+    Some(tok), Some(True) -> Cont(CanBacktrack(False), tok, next_state)
+    Some(tok), Some(False) ->
+      Fail(
+        CanBacktrack(False),
+        bag_from_state(state, Expected(expecting, got: tok)),
+      )
+    _, _ -> Fail(CanBacktrack(False), bag_from_state(state, EndOfInput))
+  }
 }
 
 ///
-pub fn take_while(predicate: fn(String) -> Bool) -> Parser(String, ctx) {
-  Parser(fn(state) {
-    let #(str, next_state) = next(state)
-    let should_take =
-      str
-      |> option.map(predicate)
-      |> option.unwrap(False)
-    let str = option.unwrap(str, "")
+///
+/// 💡 This parser can succeed without consuming any input (if the predicate
+/// immediately fails). You can end up with an infinite loop if you're not
+/// careful. Use [`take_while1`](#take_while1) if you want to guarantee you
+/// take at least one token.
+///
+pub fn take_while(predicate: fn(tok) -> Bool) -> Parser(List(tok), tok, ctx) {
+  use state <- Parser
+  let #(tok, next_state) = next(state)
 
-    case should_take {
-      True ->
-        runwrap(next_state, map(take_while(predicate), string.append(str, _)))
-
-      False -> Cont(Backtrack, "", state)
-    }
-  })
+  case tok, option.map(tok, predicate) {
+    Some(tok), Some(True) ->
+      runwrap(next_state, {
+        use toks <- do(take_while(predicate))
+        return([tok, ..toks])
+      })
+    Some(_), Some(False) -> Cont(CanBacktrack(False), [], state)
+    _, _ -> Cont(CanBacktrack(False), [], state)
+  }
 }
 
 ///
-pub fn take_if_and_while(
-  predicate: fn(String) -> Bool,
+///
+/// 💡 If this parser succeeds, the list produced is guaranteed to be non-empty.
+/// Feel free to `let assert` the result!
+///
+pub fn take_while1(
   expecting: String,
-) -> Parser(String, ctx) {
-  map2(take_if(predicate, expecting), take_while(predicate), string.append)
+  predicate: fn(tok) -> Bool,
+) -> Parser(List(tok), tok, ctx) {
+  use x <- do(take_if(expecting, predicate))
+  use xs <- do(take_while(predicate))
+
+  return([x, ..xs])
 }
 
 ///
-pub fn take_until(predicate: fn(String) -> Bool) -> Parser(String, ctx) {
+///
+pub fn take_until(predicate: fn(tok) -> Bool) -> Parser(List(tok), tok, ctx) {
   take_while(function.compose(predicate, bool.negate))
+}
+
+///
+///
+/// 💡 If this parser succeeds, the list produced is guaranteed to be non-empty.
+/// Feel free to `let assert` the result!
+///
+pub fn take_until1(
+  expecting: String,
+  predicate: fn(tok) -> Bool,
+) -> Parser(List(tok), tok, ctx) {
+  take_while1(expecting, function.compose(predicate, bool.negate))
+}
+
+///
+///
+pub fn take_up_to(
+  parser: Parser(a, tok, ctx),
+  count: Int,
+) -> Parser(List(a), tok, ctx) {
+  case count {
+    0 -> return([])
+    _ ->
+      {
+        use x <- do(parser)
+        use xs <- do(take_up_to(parser, count - 1))
+
+        return([x, ..xs])
+      }
+      |> or([])
+  }
+}
+
+///
+///
+pub fn take_at_least(
+  parser: Parser(a, tok, ctx),
+  count: Int,
+) -> Parser(List(a), tok, ctx) {
+  case count {
+    0 -> many(parser)
+    _ -> {
+      use x <- do(parser)
+      use xs <- do(take_at_least(parser, count - 1))
+
+      return([x, ..xs])
+    }
+  }
+}
+
+///
+///
+pub fn take_exactly(
+  parser: Parser(a, tok, ctx),
+  count: Int,
+) -> Parser(List(a), tok, ctx) {
+  case count {
+    0 -> return([])
+    _ -> {
+      use x <- do(parser)
+      use xs <- do(take_exactly(parser, count - 1))
+
+      return([x, ..xs])
+    }
+  }
+}
+
+/// Try the given parser, but if it fails return the given default value instead
+/// of failing.
+///
+pub fn or(parser: Parser(a, tok, ctx), default: a) -> Parser(a, tok, ctx) {
+  one_of([parser, return(default)])
+}
+
+/// Try the given parser, but if it fails return
+/// [`None`](#https://hexdocs.pm/gleam_stdlib/gleam/option.html#Option) instead
+/// of failing.
+///
+pub fn optional(parser: Parser(a, tok, ctx)) -> Parser(Option(a), tok, ctx) {
+  one_of([map(parser, Some), return(None)])
+}
+
+/// Take the next token and attempt to transform it with the given function. This
+/// is useful when creating reusable primtive parsers for your own tokens such as
+/// `take_identifier` or `take_number`.
+///
+pub fn take_map(
+  expecting: String,
+  f: fn(tok) -> Option(a),
+) -> Parser(a, tok, ctx) {
+  use state <- Parser
+  let #(tok, next_state) = next(state)
+
+  case tok, option.then(tok, f) {
+    None, _ -> Fail(CanBacktrack(False), bag_from_state(state, EndOfInput))
+    Some(tok), None ->
+      Fail(
+        CanBacktrack(False),
+        bag_from_state(state, Expected(expecting, got: tok)),
+      )
+    _, Some(a) -> Cont(CanBacktrack(False), a, next_state)
+  }
+}
+
+///
+///
+pub fn take_map_while(f: fn(tok) -> Option(a)) -> Parser(List(a), tok, ctx) {
+  use state <- Parser
+  let #(tok, next_state) = next(state)
+
+  case tok, option.then(tok, f) {
+    None, _ -> Cont(CanBacktrack(True), [], state)
+    Some(_), None -> Cont(CanBacktrack(True), [], state)
+    _, Some(x) ->
+      runwrap(
+        next_state,
+        take_map_while(f)
+        |> map(list.prepend(_, x)),
+      )
+  }
+}
+
+///
+///
+/// 💡 If this parser succeeds, the list produced is guaranteed to be non-empty.
+/// Feel free to `let assert` the result!
+///
+pub fn take_map_while1(
+  expecting: String,
+  f: fn(tok) -> Option(a),
+) -> Parser(List(a), tok, ctx) {
+  use x <- do(take_map(expecting, f))
+  use xs <- do(take_map_while(f))
+
+  return([x, ..xs])
 }
 
 // ERRORS ----------------------------------------------------------------------
 
-pub type Error {
+///
+///
+///
+///
+pub type Error(tok) {
   BadParser(String)
   Custom(String)
   EndOfInput
-  Expected(String, got: String)
-  Unexpected(String)
+  Expected(String, got: tok)
+  Unexpected(tok)
 }
 
+/// A dead end represents a the point where a parser that had committed down a
+/// path failed. It contains the position of the failure, the [`Error`](#Error)
+/// describing the failure, and the context stack for any parsers that had run.
 ///
-pub type DeadEnd(ctx) {
-  DeadEnd(row: Int, col: Int, problem: Error, context: List(Located(ctx)))
+pub type DeadEnd(tok, ctx) {
+  DeadEnd(pos: Span, problem: Error(tok), context: List(#(Span, ctx)))
 }
 
-type Bag(ctx) {
+type Bag(tok, ctx) {
   Empty
-  Cons(Bag(ctx), DeadEnd(ctx))
-  Append(Bag(ctx), Bag(ctx))
+  Cons(Bag(tok, ctx), DeadEnd(tok, ctx))
+  Append(Bag(tok, ctx), Bag(tok, ctx))
 }
 
-fn bag_from_state(state: State(ctx), problem: Error) -> Bag(ctx) {
-  Cons(Empty, DeadEnd(state.row, state.col, problem, state.context))
+fn bag_from_state(state: State(tok, ctx), problem: Error(tok)) -> Bag(tok, ctx) {
+  Cons(Empty, DeadEnd(state.pos, problem, state.ctx))
 }
 
-fn to_deadends(bag: Bag(ctx), acc: List(DeadEnd(ctx))) -> List(DeadEnd(ctx)) {
+fn to_deadends(
+  bag: Bag(tok, ctx),
+  acc: List(DeadEnd(tok, ctx)),
+) -> List(DeadEnd(tok, ctx)) {
   case bag {
     Empty -> acc
-
     Cons(Empty, deadend) -> [deadend, ..acc]
-
     Cons(bag, deadend) -> to_deadends(bag, [deadend, ..acc])
-
     Append(left, right) -> to_deadends(left, to_deadends(right, acc))
   }
 }
 
-fn add_bag_to_step(step: Step(a, ctx), left: Bag(ctx)) -> Step(a, ctx) {
+fn add_bag_to_step(
+  step: Step(a, tok, ctx),
+  left: Bag(tok, ctx),
+) -> Step(a, tok, ctx) {
   case step {
     Cont(can_backtrack, a, state) -> Cont(can_backtrack, a, state)
-
     Fail(can_backtrack, right) -> Fail(can_backtrack, Append(left, right))
   }
 }
@@ -472,37 +778,35 @@ fn add_bag_to_step(step: Step(a, ctx), left: Bag(ctx)) -> Step(a, ctx) {
 // CONTEXT ---------------------------------------------------------------------
 
 ///
-pub fn in(parser: Parser(a, ctx), context: ctx) -> Parser(a, ctx) {
-  Parser(fn(state) {
-    case runwrap(push_context(state, context), parser) {
-      Cont(can_backtrack, a, state) ->
-        Cont(can_backtrack, a, pop_context(state))
+///
+pub fn in(parser: Parser(a, tok, ctx), context: ctx) -> Parser(a, tok, ctx) {
+  use state <- Parser
 
-      Fail(can_backtrack, bag) -> Fail(can_backtrack, bag)
-    }
-  })
-}
-
-fn push_context(state: State(ctx), context: ctx) -> State(ctx) {
-  let located = Located(state.row, state.col, context)
-  State(..state, context: [located, ..state.context])
-}
-
-fn pop_context(state: State(ctx)) -> State(ctx) {
-  case state.context {
-    [] -> state
-
-    [_, ..context] -> State(..state, context: context)
+  case runwrap(push_context(state, context), parser) {
+    Cont(can_backtrack, a, state) -> Cont(can_backtrack, a, pop_context(state))
+    Fail(can_backtrack, bag) -> Fail(can_backtrack, bag)
   }
 }
 
-/// Run the given parser and then inspect it's state. 
-pub fn inspect(parser: Parser(a, ctx), message: String) -> Parser(a, ctx) {
-  Parser(fn(state) {
-    io.print(message)
-    io.println(": ")
+fn push_context(state: State(tok, ctx), context: ctx) -> State(tok, ctx) {
+  State(..state, ctx: [#(state.pos, context), ..state.ctx])
+}
 
-    runwrap(state, parser)
-    |> io.debug
-  })
+fn pop_context(state: State(tok, ctx)) -> State(tok, ctx) {
+  case state.ctx {
+    [] -> state
+    [_, ..context] -> State(..state, ctx: context)
+  }
+}
+
+/// Run the given parser and then inspect it's state.
+pub fn inspect(
+  parser: Parser(a, tok, ctx),
+  message: String,
+) -> Parser(a, tok, ctx) {
+  use state <- Parser
+  io.println(message <> ": ")
+
+  runwrap(state, parser)
+  |> io.debug
 }

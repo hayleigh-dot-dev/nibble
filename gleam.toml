@@ -1,17 +1,27 @@
 name = "nibble"
-version = "0.2.3"
-
-gleam = ">= 0.33.0"
+version = "1.1.0"
 
 # Fill out these fields if you intend to generate HTML documentation or publish
 # your project to the Hex package manager.
 #
 licences = ["MIT"]
-description = "A string parsing library heavily inspired by elm/parser."
+description = "A string parsing library combining a traditional lexer with parser combinators.."
 repository = { type = "github", user = "hayleigh-dot-dev", repo = "gleam-nibble" }
+gleam = ">= 0.34.0"
 
 [dependencies]
 gleam_stdlib = "~> 0.34"
 
 [dev-dependencies]
 gleeunit = "~> 1.0"
+
+[documentation]
+pages = [
+  { title = "Introduction to Nibble", path = "intro.html", source = "./docs/00-introduction.md" },
+  { title = "Lexing", path = "lexing.html", source = "./docs/01-lexing.md" },
+  { title = "Parsing", path = "parsing.html", source = "./docs/02-parsing.md" },
+  { title = "Parse Contexts", path = "parse-contexts.html", source = "./docs/03-parse-contexts.md" },
+  { title = "Backtracking", path = "backtracking.html", source = "./docs/04-backtracking.md" },
+  { title = "Lexer Modes", path = "lexer-modes.html", source = "./docs/05-lexer-modes.md" },
+  { title = "Pratt Parsing", path = "pratt-parsing.html", source = "./docs/06-pratt-parsing.md" }
+]
