@@ -76,7 +76,6 @@
 // IMPORTS ---------------------------------------------------------------------
 
 import gleam/bool
-import gleam/function
 import gleam/io
 import gleam/string
 import gleam/list
@@ -380,7 +379,7 @@ pub fn span() -> Parser(Span, tok, ctx) {
 ///
 ///
 pub fn any() -> Parser(tok, tok, ctx) {
-  take_if("a single token", function.constant(True))
+  take_if("a single token", fn(_) { True })
 }
 
 ///
@@ -406,7 +405,7 @@ pub fn eof() -> Parser(Nil, tok, ctx) {
   use state <- Parser
 
   case next(state) {
-    #(option.Some(tok), _) ->
+    #(option.Some(tok), state) ->
       Fail(CanBacktrack(False), bag_from_state(state, Unexpected(tok)))
     #(option.None, _) -> Cont(CanBacktrack(False), Nil, state)
   }
@@ -440,7 +439,7 @@ pub fn sequence(
 ) -> Parser(List(a), tok, ctx) {
   one_of([
     parser
-    |> then(more(_, parser, sep)),
+      |> then(more(_, parser, sep)),
     return([]),
   ])
 }
@@ -537,9 +536,9 @@ pub fn take_if(
     Some(tok), Some(False) ->
       Fail(
         CanBacktrack(False),
-        bag_from_state(state, Expected(expecting, got: tok)),
+        bag_from_state(next_state, Expected(expecting, got: tok)),
       )
-    _, _ -> Fail(CanBacktrack(False), bag_from_state(state, EndOfInput))
+    _, _ -> Fail(CanBacktrack(False), bag_from_state(next_state, EndOfInput))
   }
 }
 
@@ -583,7 +582,7 @@ pub fn take_while1(
 ///
 ///
 pub fn take_until(predicate: fn(tok) -> Bool) -> Parser(List(tok), tok, ctx) {
-  take_while(function.compose(predicate, bool.negate))
+  take_while(fn(tok) { bool.negate(predicate(tok)) })
 }
 
 ///
@@ -595,7 +594,7 @@ pub fn take_until1(
   expecting: String,
   predicate: fn(tok) -> Bool,
 ) -> Parser(List(tok), tok, ctx) {
-  take_while1(expecting, function.compose(predicate, bool.negate))
+  take_while1(expecting, fn(tok) { bool.negate(predicate(tok)) })
 }
 
 ///
@@ -678,11 +677,11 @@ pub fn take_map(
   let #(tok, next_state) = next(state)
 
   case tok, option.then(tok, f) {
-    None, _ -> Fail(CanBacktrack(False), bag_from_state(state, EndOfInput))
+    None, _ -> Fail(CanBacktrack(False), bag_from_state(next_state, EndOfInput))
     Some(tok), None ->
       Fail(
         CanBacktrack(False),
-        bag_from_state(state, Expected(expecting, got: tok)),
+        bag_from_state(next_state, Expected(expecting, got: tok)),
       )
     _, Some(a) -> Cont(CanBacktrack(False), a, next_state)
   }
@@ -701,7 +700,7 @@ pub fn take_map_while(f: fn(tok) -> Option(a)) -> Parser(List(a), tok, ctx) {
       runwrap(
         next_state,
         take_map_while(f)
-        |> map(list.prepend(_, x)),
+          |> map(list.prepend(_, x)),
       )
   }
 }
