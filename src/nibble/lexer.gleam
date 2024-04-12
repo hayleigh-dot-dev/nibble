@@ -5,11 +5,85 @@
 //// Parser combinators are a powerful and flexible way to build parsers, but
 //// they offer come at a performance cost compared to hand-written parsers or
 //// parser generators. On the other hand, writing a lexer by hand can be a bit
-//// tedious and difficult.
+//// tedious and difficult. Nibble aims to provide a happy middle-ground by making
+//// it easy to produce OK-performing lexers and then use parser combinators that
+//// can be much faster working on the smaller token stream.
 ////
-//// Nibble aims to provide a happy middle-ground by making it easy to produce
-//// OK-performing lexers and then use parser combinators that can be much faster
-//// working on the smaller token stream.
+//// To see how Nibble's lexer works, let's consider the example from the
+//// [introduction guide](#):
+////
+//// ```gleam
+//// fn lexer() {
+////   lexer.simple([
+////     lexer.token("hello", Hello),
+////     lexer.variable("[a-zA-Z]", "\w", Name),
+////     lexer.whitespace(Nil)
+////     |> lexer.ignore
+////   ])
+//// }
+//// ```
+////
+//// We have three _matchers_ here. One for the exact token "hello", one for at
+//// least one letter followed by any number of word characters, and one for any
+//// amount of whitespace.
+////
+//// To see how these matchers work we'll look at the input string `"Hello Joe"`.
+//// Nibble looks at the input string one grapheme at a time, and runs each of
+//// the matchers in order. At the same time, it accumulates a list of the tokens
+//// it has produced so far.
+////
+//// ```
+//// Tokens : []
+//// Input  : Hello Joe
+////          ^
+//// ```
+////
+//// If no matcher matches the input, Nibble will store the current grapheme and
+//// move on to the next one:
+////
+//// ```
+//// Tokens : []
+//// Input  : Hello Joe
+////          -^
+//// ```
+////
+//// This continues until a matcher _does_ match the input:
+////
+//// ```
+//// Tokens : []
+//// Input  : Hello Joe
+////          ----^
+//// ```
+////
+//// The accumulated string (known as a _lexeme_) is consumed, and whatever token
+//// value the matcher produces is added to the list of tokens:
+////
+//// ```
+//// Tokens : [Hello]
+//// Input  :  Joe
+////          ^
+//// ```
+////
+//// Here we have some whitespace that would be matched by `lexer.whitespace`, by
+//// we passed that matcher to the [`lexer.ignore`](#ignore) comabinator. The matcher
+//// will still consume the input, but this time it will not produce a new token
+//// value:
+////
+//// ```
+//// Tokens : [Hello]
+//// Input  : Joe
+////          ^
+//// ```
+////
+//// As we expect, the lexer continues on accumulating input. When it reaches the
+//// end of the input string with a value it checks all the matches one last time
+//// to see if they will produce a final token. In this case the `lexer.variable`
+//// matcher will match the accumulated "Joe" and we're left with the following:
+////
+//// ```
+//// Tokens : [Hello, Name("Joe")]
+//// Input  :
+//// ```
 ////
 
 // IMPORTS ---------------------------------------------------------------------
@@ -73,7 +147,6 @@ pub type Token(a) {
 /// A source span is a range into the source string that represents the start and
 /// end of a lexeme in a human-readable way. That means instead of a straight index
 /// into the string you get a row and column for the start and end instead!
-///
 ///
 pub type Span {
   Span(row_start: Int, col_start: Int, row_end: Int, col_end: Int)
