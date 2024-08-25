@@ -34,7 +34,7 @@ fn parser() {
 }
 
 fn name_parser() {
-  use tok <- nibble.take_map("name")
+  use tok <- nibble.take_map("Expected a name")
 
   case tok {
     Name(name) -> option.Some(name)
