@@ -18,10 +18,9 @@ type T {
 fn lexer() {
   lexer.simple([
     lexer.token("hello", Hello),
-    lexer.variable("\w", "\w", Name),
-
+    lexer.variable(set.new(), Name),
     lexer.whitespace(Nil)
-    |> lexer.ignore
+      |> lexer.ignore,
   ])
 }
 ```
@@ -35,23 +34,34 @@ fn parser() {
 }
 
 fn name_parser() {
-  use tok <- nibble.take_map
+  use tok <- nibble.take_map("name")
 
   case tok {
-    Name(name) -> Ok(name)
-    _ -> Error("Expected a name")
+    Name(name) -> option.Some(name)
+    _ -> option.None
   }
 }
 ```
 
 ```gleam
-fn main() {
-  let input = "Hello Joe"
+pub fn main() {
+  let input = "hello joe"
 
-  input
-  |> lexer.run(lexer())
-  |> parser.run(parser())
-  //=> "You are greeting Joe"
+  use tokens <- result.try(
+    input
+    |> lexer.run(lexer()),
+  )
+
+  case tokens |> nibble.run(parser()) {
+    Ok(value) -> io.println(value)
+    Error(err) -> {
+      let _ = io.debug(err)
+      Nil
+    }
+  }
+
+  Ok("")
+  //=> "You are greeting joe"
 }
 ```
 
