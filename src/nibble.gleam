@@ -1,16 +1,16 @@
 // IMPORTS ---------------------------------------------------------------------
 
 import gleam/bool
-import gleam/io
-import gleam/string
-import gleam/list
 import gleam/dict.{type Dict}
+import gleam/io
+import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/string
 import nibble/lexer.{type Span, type Token, Span, Token}
 
 // TYPES -----------------------------------------------------------------------
 
-/// The `Parser` type has three paramteres, let's take a look at each of them:
+/// The `Parser` type has three parameters, let's take a look at each of them:
 ///
 /// ```
 /// Parser(a, tok, ctx)
@@ -301,14 +301,14 @@ pub fn span() -> Parser(Span, tok, ctx) {
 
 // SIMPLE PARSERS --------------------------------------------------------------
 
-///
-///
+/// Returns the next token in the input stream. Fails if there are no more 
+/// tokens.
 pub fn any() -> Parser(tok, tok, ctx) {
   take_if("a single token", fn(_) { True })
 }
 
-///
-///
+/// Returns nil if the token `tok` is the next token in the input stream. Fails
+/// if the next token is not `tok` or if the input stream is empty.
 pub fn token(tok: tok) -> Parser(Nil, tok, ctx) {
   use state <- Parser
 
@@ -324,8 +324,9 @@ pub fn token(tok: tok) -> Parser(Nil, tok, ctx) {
   }
 }
 
-///
-///
+/// Succeeeds if the input stream is empty, fails otherwise. This is useful to
+/// verify that you've consumed all the tokens in the input stream.
+/// 
 pub fn eof() -> Parser(Nil, tok, ctx) {
   use state <- Parser
 
@@ -338,8 +339,8 @@ pub fn eof() -> Parser(Nil, tok, ctx) {
 
 // BRANCHING AND LOOPING -------------------------------------------------------
 
-///
-///
+/// Try the given parsers in order until one succeeds. If all fail, the parser
+/// fails.
 pub fn one_of(parsers: List(Parser(a, tok, ctx))) -> Parser(a, tok, ctx) {
   use state <- Parser
   let init = Fail(CanBacktrack(False), Empty)
@@ -357,6 +358,9 @@ pub fn one_of(parsers: List(Parser(a, tok, ctx))) -> Parser(a, tok, ctx) {
 }
 
 ///
+/// Consumes a sequence of tokens using the given parser, separated by the
+/// given `separator` parser. Returns a list of the parsed values, ignoring
+/// the results of the `separator` parser. 
 ///
 pub fn sequence(
   parser: Parser(a, tok, ctx),
@@ -370,12 +374,20 @@ pub fn sequence(
 }
 
 ///
-///
+/// Returns consecutive applications of the given parser. If you are parsing
+/// values with a separator, use [`sequence`](#sequence) instead.
+/// 
+/// 💡 This parser can succeed without consuming any input. You can end up with
+/// an infinite loop if you're not careful. Use [`many1`](#many1) if you want
+/// to guarantee you take at least one token.
+/// 
 pub fn many(parser: Parser(a, tok, ctx)) -> Parser(List(a), tok, ctx) {
   sequence(parser, return(Nil))
 }
 
 ///
+/// This is the same as [`many1`](#many1), but is guaranteed to return at least
+/// one value.
 ///
 pub fn many1(parser: Parser(a, tok, ctx)) -> Parser(List(a), tok, ctx) {
   use x <- do(parser)
@@ -439,6 +451,7 @@ fn loop_help(f, commit, loop_state, state) {
 // PREDICATES ------------------------------------------------------------------
 
 ///
+/// Fails if the given condition is false, otherwise returns `Nil`.
 ///
 pub fn guard(cond: Bool, expecting: String) -> Parser(Nil, tok, ctx) {
   case cond {
@@ -448,6 +461,7 @@ pub fn guard(cond: Bool, expecting: String) -> Parser(Nil, tok, ctx) {
 }
 
 ///
+/// Takes the next token off the stream if it satisfies the given predicate.
 ///
 pub fn take_if(
   expecting: String,
@@ -468,7 +482,8 @@ pub fn take_if(
 }
 
 ///
-///
+/// Take tokens from the stream while the given predicate is satisfied.
+/// 
 /// 💡 This parser can succeed without consuming any input (if the predicate
 /// immediately fails). You can end up with an infinite loop if you're not
 /// careful. Use [`take_while1`](#take_while1) if you want to guarantee you
@@ -490,7 +505,8 @@ pub fn take_while(predicate: fn(tok) -> Bool) -> Parser(List(tok), tok, ctx) {
 }
 
 ///
-///
+/// Take tokens from the stream while the given predicate is satisfied.
+/// 
 /// 💡 If this parser succeeds, the list produced is guaranteed to be non-empty.
 /// Feel free to `let assert` the result!
 ///
@@ -505,13 +521,20 @@ pub fn take_while1(
 }
 
 ///
-///
+/// Take token from the stream until the given predicate is satisfied.
+/// 
+/// 💡 This parser can succeed without consuming any input (if the predicate
+/// immediately succeeds). You can end up with an infinite loop if you're not
+/// careful. Use [`take_until1`](#take_until1) if you want to guarantee you
+/// take at least one token.
+/// 
 pub fn take_until(predicate: fn(tok) -> Bool) -> Parser(List(tok), tok, ctx) {
   take_while(fn(tok) { bool.negate(predicate(tok)) })
 }
 
 ///
-///
+/// Take token from the stream until the given predicate is satisfied.
+/// 
 /// 💡 If this parser succeeds, the list produced is guaranteed to be non-empty.
 /// Feel free to `let assert` the result!
 ///
@@ -523,7 +546,12 @@ pub fn take_until1(
 }
 
 ///
-///
+/// Apply the parser up to `count` times, returning a list of the results.
+/// 
+/// 💡 This parser can succeed without consuming any input (if the parser
+/// fails immediately) and return an empty list. You can end up with an
+/// infinite loop if you're not careful.
+/// 
 pub fn take_up_to(
   parser: Parser(a, tok, ctx),
   count: Int,
@@ -542,7 +570,8 @@ pub fn take_up_to(
 }
 
 ///
-///
+/// Apply the parser a minimum of `count` times, returning a list of the results.
+/// 
 pub fn take_at_least(
   parser: Parser(a, tok, ctx),
   count: Int,
@@ -559,6 +588,7 @@ pub fn take_at_least(
 }
 
 ///
+/// Take `count` consecutive tokens from the stream using the given parser.
 ///
 pub fn take_exactly(
   parser: Parser(a, tok, ctx),
@@ -575,6 +605,7 @@ pub fn take_exactly(
   }
 }
 
+///
 /// Try the given parser, but if it fails return the given default value instead
 /// of failing.
 ///
@@ -582,6 +613,7 @@ pub fn or(parser: Parser(a, tok, ctx), default: a) -> Parser(a, tok, ctx) {
   one_of([parser, return(default)])
 }
 
+///
 /// Try the given parser, but if it fails return
 /// [`None`](#https://hexdocs.pm/gleam_stdlib/gleam/option.html#Option) instead
 /// of failing.
@@ -590,6 +622,7 @@ pub fn optional(parser: Parser(a, tok, ctx)) -> Parser(Option(a), tok, ctx) {
   one_of([map(parser, Some), return(None)])
 }
 
+///
 /// Take the next token and attempt to transform it with the given function. This
 /// is useful when creating reusable primtive parsers for your own tokens such as
 /// `take_identifier` or `take_number`.
@@ -613,7 +646,14 @@ pub fn take_map(
 }
 
 ///
-///
+/// Applies a function to consecutive tokens while the given function returns
+/// `Some`.
+/// 
+/// 💡 This parser can succeed without consuming any input (if the predicate
+/// immediately succeeds). You can end up with an infinite loop if you're not
+/// careful. Use [`take_map_while1`](#take_map_while1) if you want to guarantee you
+/// take at least one token.
+/// 
 pub fn take_map_while(f: fn(tok) -> Option(a)) -> Parser(List(a), tok, ctx) {
   use state <- Parser
   let #(tok, next_state) = next(state)
@@ -630,7 +670,8 @@ pub fn take_map_while(f: fn(tok) -> Option(a)) -> Parser(List(a), tok, ctx) {
   }
 }
 
-///
+/// Applies a function to consecutive tokens while the given function returns
+/// `Some`.
 ///
 /// 💡 If this parser succeeds, the list produced is guaranteed to be non-empty.
 /// Feel free to `let assert` the result!
@@ -659,6 +700,7 @@ pub type Error(tok) {
   Unexpected(tok)
 }
 
+///
 /// A dead end represents a the point where a parser that had committed down a
 /// path failed. It contains the position of the failure, the [`Error`](#Error)
 /// describing the failure, and the context stack for any parsers that had run.
@@ -723,7 +765,9 @@ fn pop_context(state: State(tok, ctx)) -> State(tok, ctx) {
   }
 }
 
+///
 /// Run the given parser and then inspect it's state.
+/// 
 pub fn inspect(
   parser: Parser(a, tok, ctx),
   message: String,
