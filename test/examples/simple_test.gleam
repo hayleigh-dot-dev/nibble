@@ -186,6 +186,7 @@ pub fn take_if_test() {
 }
 
 pub fn take_map_test() {
+  // See the body of `number_parser` for the use of `take_map`.
   let assert Ok(tokens) = lexer.run("10", lexer())
   let assert Ok(10) = run(tokens, number_parser())
   let assert Ok(tokens) = lexer.run("b", lexer())
