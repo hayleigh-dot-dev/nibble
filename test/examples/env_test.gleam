@@ -1,12 +1,11 @@
 // IMPORTS ---------------------------------------------------------------------
 
-import gleam/function
-import gleam/int
+import gleam/dict.{type Dict}
 import gleam/float
-import gleam/set
+import gleam/int
 import gleam/io
 import gleam/option.{None, Some}
-import gleam/dict.{type Dict}
+import gleam/set
 import gleeunit/should
 import nibble.{Break, Continue, do, return}
 import nibble/lexer
@@ -103,15 +102,14 @@ fn lexer() {
     // Keys can be any non-whitespace character
     lexer.identifier("[^\\s=#]", "[^\\s=]", set.new(), Key),
     // We'll allow number literals and just convert them to string values
-    lexer.number(
-      function.compose(int.to_string, Str),
-      function.compose(float.to_string, Str),
-    ),
+    lexer.number(fn(int) { Str(int.to_string(int)) }, fn(float) {
+      Str(float.to_string(float))
+    }),
     // Drop comments and whitespace
-    lexer.comment("#", function.constant(Nil))
-    |> lexer.ignore,
+    lexer.comment("#", fn(_) { Nil })
+      |> lexer.ignore,
     lexer.spaces(Nil)
-    |> lexer.ignore,
+      |> lexer.ignore,
   ])
 }
 
@@ -120,18 +118,18 @@ fn parser() {
 
   nibble.one_of([
     key_value_parser(env)
-    |> nibble.map(Continue),
+      |> nibble.map(Continue),
     // The `key_value_parser` already consumes one new line. This parser makes
     // sure that if k/v pairs are separated by _multiple_ newlines that we still
     // consume them all.
     //
-    // We use `many1` here because we need to consume at least _one_ token to 
+    // We use `many1` here because we need to consume at least _one_ token to
     // prevent an infinite loop.
     //
     nibble.many1(nibble.token(NewLine))
-    |> nibble.replace(Continue(env)),
+      |> nibble.replace(Continue(env)),
     nibble.eof()
-    |> nibble.replace(Break(env)),
+      |> nibble.replace(Break(env)),
   ])
 }
 

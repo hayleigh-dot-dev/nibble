@@ -165,7 +165,7 @@ pub fn keyword_breaker_test() {
     lexer.keyword("as", "\\s", Kwd("as")),
     lexer.keyword("assert", "\\s", Var("assert")),
     lexer.token(" ", Nil)
-    |> lexer.ignore(),
+      |> lexer.ignore(),
   ])
 }
 

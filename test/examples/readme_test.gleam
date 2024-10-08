@@ -53,7 +53,7 @@ fn lexer() {
     lexer.token(",", Comma),
     // Skip over whitespace, we don't care about it!
     lexer.whitespace(Nil)
-    |> lexer.ignore,
+      |> lexer.ignore,
   ])
 }
 

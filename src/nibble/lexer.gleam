@@ -89,7 +89,6 @@
 // IMPORTS ---------------------------------------------------------------------
 
 import gleam/float
-import gleam/function
 import gleam/int
 import gleam/list
 import gleam/regex
@@ -536,7 +535,7 @@ pub fn variable(
 ///
 ///
 pub fn spaces(token: a) -> Matcher(a, mode) {
-  spaces_(function.constant(token))
+  spaces_(fn(_) { token })
 }
 
 ///

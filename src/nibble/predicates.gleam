@@ -1,5 +1,5 @@
-import gleam/string
 import gleam/list
+import gleam/string
 
 pub fn string(str: String, predicate: fn(String) -> Bool) -> Bool {
   str != "" && list.all(string.to_graphemes(str), predicate)

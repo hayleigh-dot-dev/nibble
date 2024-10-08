@@ -1,8 +1,7 @@
 // IMPORTS ---------------------------------------------------------------------
 
-import gleam/io
 import gleam/int
-import gleam/function
+import gleam/io
 import gleeunit/should
 import nibble.{type Parser}
 import nibble/lexer.{type Lexer}
@@ -345,7 +344,7 @@ fn should(description: String, run: fn(fn(String, Json) -> Nil) -> Nil) -> Nil {
 
 fn lexer() -> Lexer(JsonT, Nil) {
   lexer.simple([
-    lexer.number(function.compose(int.to_float, NumT), NumT),
+    lexer.number(fn(int) { NumT(int.to_float(int)) }, NumT),
     lexer.token(":", Colon),
     lexer.token(",", Comma),
     lexer.token("false", FalseT),
@@ -358,7 +357,7 @@ fn lexer() -> Lexer(JsonT, Nil) {
     lexer.string("\"", StrT),
     //
     lexer.whitespace(Nil)
-    |> lexer.ignore,
+      |> lexer.ignore,
   ])
 }
 
@@ -366,9 +365,9 @@ fn parser() -> Parser(Json, JsonT, Context) {
   nibble.one_of([
     // Structures
     array_parser()
-    |> nibble.in(InArray),
+      |> nibble.in(InArray),
     object_parser()
-    |> nibble.in(InObject),
+      |> nibble.in(InObject),
     literal_parser(),
   ])
 }
