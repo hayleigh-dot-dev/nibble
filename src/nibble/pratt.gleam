@@ -44,9 +44,9 @@ pub fn sub_expression(
 
     nibble.one_of([
       operation(expr, config, precedence)
-      |> nibble.map(nibble.Continue),
+        |> nibble.map(nibble.Continue),
       nibble.return(expr)
-      |> nibble.map(nibble.Break),
+        |> nibble.map(nibble.Break),
     ])
   }
 
@@ -111,13 +111,10 @@ pub fn postfix(
   apply: fn(a) -> a,
 ) -> Operator(a, tok, ctx) {
   use _ <- Operator
-  #(
-    precedence,
-    fn(lhs) {
-      use _ <- nibble.do(operator)
-      nibble.return(apply(lhs))
-    },
-  )
+  #(precedence, fn(lhs) {
+    use _ <- nibble.do(operator)
+    nibble.return(apply(lhs))
+  })
 }
 
 fn make_infix(
@@ -127,13 +124,10 @@ fn make_infix(
 ) -> Operator(a, tok, ctx) {
   let #(left_precedence, right_precedence) = precedence
   use config <- Operator
-  #(
-    left_precedence,
-    fn(lhs) {
-      use _ <- nibble.do(operator)
-      use subexpr <- nibble.do(sub_expression(config, right_precedence))
+  #(left_precedence, fn(lhs) {
+    use _ <- nibble.do(operator)
+    use subexpr <- nibble.do(sub_expression(config, right_precedence))
 
-      nibble.return(apply(lhs, subexpr))
-    },
-  )
+    nibble.return(apply(lhs, subexpr))
+  })
 }

@@ -6,8 +6,8 @@ import gleam/io
 import gleam/option.{None, Some}
 import gleeunit/should
 import nibble.{do, do_in, return}
-import nibble/pratt
 import nibble/lexer
+import nibble/pratt
 
 // TYPES -----------------------------------------------------------------------
 
@@ -158,10 +158,10 @@ fn lexer() {
     lexer.token("/", Div),
     // Numbers
     lexer.number(int.to_float, function.identity)
-    |> lexer.map(Num),
+      |> lexer.map(Num),
     // Whitespace
     lexer.whitespace(Nil)
-    |> lexer.ignore(),
+      |> lexer.ignore(),
   ])
 }
 
