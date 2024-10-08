@@ -1,11 +1,11 @@
 // IMPORTS ---------------------------------------------------------------------
 
 import gleam/bool
-import gleam/dict.{type Dict}
 import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
+import glearray.{type Array}
 import nibble/lexer.{type Span, type Token, Span, Token}
 
 // TYPES -----------------------------------------------------------------------
@@ -44,19 +44,11 @@ type Step(a, tok, ctx) {
 
 type State(tok, ctx) {
   State(
-    // The Gleam stdlib doesn't seem to have an `Array` type, so we'll just
-    // use a `Dict` instead. We only need something for indexed access, to it's
-    // not a huge deal.
-    //
-    // TODO: Louis says making an `Array` backed by tuples in Erlang will
-    // be way better for performance. In JavaScript we could just use normal
-    // arrays - someone should look into this.
-    //
     // ❓ You might wonder why we're wanting an `Array` at all when we could just
     // use a `List` and backtrack to a previous state when we need to. By tracking
     // the index and indexing into the dict/array directly we save ever having to
     // allocate something new, which is a big deal for performance!
-    src: Dict(Int, Token(tok)),
+    src: Array(Token(tok)),
     idx: Int,
     pos: Span,
     ctx: List(#(Span, ctx)),
@@ -78,11 +70,8 @@ pub fn run(
   src: List(Token(tok)),
   parser: Parser(a, tok, ctx),
 ) -> Result(a, List(DeadEnd(tok, ctx))) {
-  let src =
-    list.index_fold(src, dict.new(), fn(dict, tok, idx) {
-      dict.insert(dict, idx, tok)
-    })
-  let init = State(src, 0, Span(1, 1, 1, 1), [])
+  let init =
+    State(src: glearray.from_list(src), idx: 0, pos: Span(1, 1, 1, 1), ctx: [])
 
   case runwrap(init, parser) {
     Cont(_, a, _) -> Ok(a)
@@ -99,7 +88,7 @@ fn runwrap(
 }
 
 fn next(state: State(tok, ctx)) -> #(Option(tok), State(tok, ctx)) {
-  case dict.get(state.src, state.idx) {
+  case glearray.get(state.src, state.idx) {
     Error(_) -> #(option.None, state)
     Ok(Token(span, _, tok)) -> #(
       option.Some(tok),

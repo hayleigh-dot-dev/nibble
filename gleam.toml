@@ -11,6 +11,7 @@ gleam = ">= 0.34.0"
 
 [dependencies]
 gleam_stdlib = ">= 0.34.0 and < 1.0.0"
+glearray = ">= 1.0.0 and < 2.0.0"
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
