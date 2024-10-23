@@ -313,7 +313,7 @@ pub fn token(tok: tok) -> Parser(Nil, tok, ctx) {
   }
 }
 
-/// Succeeeds if the input stream is empty, fails otherwise. This is useful to
+/// Succeeds if the input stream is empty, fails otherwise. This is useful to
 /// verify that you've consumed all the tokens in the input stream.
 ///
 pub fn eof() -> Parser(Nil, tok, ctx) {
@@ -613,7 +613,7 @@ pub fn optional(parser: Parser(a, tok, ctx)) -> Parser(Option(a), tok, ctx) {
 
 ///
 /// Take the next token and attempt to transform it with the given function. This
-/// is useful when creating reusable primtive parsers for your own tokens such as
+/// is useful when creating reusable primitive parsers for your own tokens such as
 /// `take_identifier` or `take_number`.
 ///
 pub fn take_map(

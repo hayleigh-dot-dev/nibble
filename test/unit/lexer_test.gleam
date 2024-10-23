@@ -19,7 +19,7 @@ type TokenT {
 // INTEGER TESTS ---------------------------------------------------------------
 
 pub fn single_digit_integer_test() {
-  use run <- should("lex a sigle digit integer")
+  use run <- should("lex a single digit integer")
 
   let input = "1"
   let expected = [Token(Span(1, 1, 1, 2), "1", Int(1))]

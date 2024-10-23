@@ -21,7 +21,7 @@ type Expr {
 // TESTS -----------------------------------------------------------------------
 
 pub fn basic_test() {
-  use run <- should("parse a basic s-expresssion")
+  use run <- should("parse a basic s-expression")
   let input = "(1 2)"
   let expected =
     SExpr(

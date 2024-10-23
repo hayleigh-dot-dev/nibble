@@ -196,7 +196,7 @@ pub fn advanced(matchers: fn(mode) -> List(Matcher(a, mode))) -> Lexer(a, mode) 
 /// The first parameter is a function that takes the current lexeme and the
 /// second parameter is a one-grapheme lookahead.
 ///
-/// Matchers created with this convienence function cannot change the lexer's
+/// Matchers created with this convenience function cannot change the lexer's
 /// mode or skip ahead to the next iteration without consuming the input.
 ///
 pub fn keep(f: fn(String, String) -> Result(a, Nil)) -> Matcher(a, mode) {
@@ -212,7 +212,7 @@ pub fn keep(f: fn(String, String) -> Result(a, Nil)) -> Matcher(a, mode) {
 /// `NoMatch` if it fails. The first parameter is a function that takes the
 /// current lexeme and the second parameter is a one-grapheme lookahead.
 ///
-/// Matchers created with this convienence function cannot change the lexer's
+/// Matchers created with this convenience function cannot change the lexer's
 /// mode or skip ahead to the next iteration without consuming the input.
 ///
 pub fn drop(f: fn(String, String) -> Bool) -> Matcher(a, mode) {

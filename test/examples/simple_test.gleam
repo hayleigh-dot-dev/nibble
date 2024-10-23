@@ -62,14 +62,14 @@ pub fn do_test() {
 
 pub fn eof_test() {
   let assert Ok(tokens) = lexer.run("aba", lexer())
-  let succesful_parser = {
+  let successful_parser = {
     use _ <- do(token(AT))
     use _ <- do(token(BT))
     use _ <- do(token(AT))
     use _ <- do(eof())
     return(Nil)
   }
-  let assert Ok(Nil) = run(tokens, succesful_parser)
+  let assert Ok(Nil) = run(tokens, successful_parser)
   let failing_parser = {
     use _ <- do(token(AT))
     use _ <- do(token(BT))
