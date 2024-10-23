@@ -32,7 +32,7 @@ pub fn is_digit(grapheme: String) -> Bool {
 
 pub fn is_whitespace(grapheme: String) -> Bool {
   case grapheme {
-    " " | "\t" | "\r" | "\n" -> True
+    " " | "\t" | "\r" | "\n" | "\f" | "\r\n" -> True
     _ -> False
   }
 }
