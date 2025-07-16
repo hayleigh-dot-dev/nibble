@@ -507,7 +507,7 @@ pub fn try_identifier(
   reserved: Set(String),
   to_value: fn(String) -> a,
 ) -> Result(Matcher(a, mode), regexp.CompileError) {
-  use ident <- result.then(regexp.from_string("^" <> start <> inner <> "*$"))
+  use ident <- result.try(regexp.from_string("^" <> start <> inner <> "*$"))
   use inner <- result.map(regexp.from_string(inner))
 
   use mode, lexeme, lookahead <- Matcher

@@ -765,5 +765,5 @@ pub fn inspect(
   io.println(message <> ": ")
 
   runwrap(state, parser)
-  |> io.debug
+  |> echo
 }
