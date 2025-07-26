@@ -55,7 +55,7 @@ pub fn main() {
   case tokens |> nibble.run(parser()) {
     Ok(value) -> io.println(value)
     Error(err) -> {
-      let _ = io.debug(err)
+      let _ = io.println_error(string.inspect(err))
       Nil
     }
   }

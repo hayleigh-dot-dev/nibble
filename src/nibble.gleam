@@ -764,6 +764,8 @@ pub fn inspect(
   use state <- Parser
   io.println(message <> ": ")
 
-  runwrap(state, parser)
-  |> io.debug
+  let step = runwrap(state, parser)
+  io.println_error(string.inspect(step))
+
+  step
 }
