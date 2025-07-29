@@ -14,6 +14,7 @@ type TokenT {
   Num(Float)
   Kwd(String)
   Var(String)
+  Comment(String)
 }
 
 // INTEGER TESTS ---------------------------------------------------------------
@@ -208,6 +209,41 @@ pub fn variable_containing_keyword_test() {
     lexer.keyword("in", "\\s", Kwd("in")),
     lexer.variable(set.from_list(["int"]), Var),
   ])
+}
+
+// COMMENT TESTS --------------------------------------------------------------
+
+pub fn linebreak_terminated_comment_test() {
+  use run <- should("lex a linebreak-terminated comment")
+
+  let input = "# this is a comment\n"
+  let expected = [
+    Token(
+      Span(1, 1, 1, 20),
+      "# this is a comment",
+      Comment(" this is a comment"),
+    ),
+  ]
+
+  run(input, expected, [
+    lexer.comment("#", Comment),
+    lexer.whitespace(Nil) |> lexer.ignore,
+  ])
+}
+
+pub fn bare_comment_test() {
+  use run <- should("lex a bare comment")
+
+  let input = "// this is a comment"
+  let expected = [
+    Token(
+      Span(1, 1, 1, 21),
+      "// this is a comment",
+      Comment(" this is a comment"),
+    ),
+  ]
+
+  run(input, expected, [lexer.comment("//", Comment)])
 }
 
 // UTILS -----------------------------------------------------------------------

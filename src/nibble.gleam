@@ -156,7 +156,7 @@ pub fn return(value: a) -> Parser(a, tok, ctx) {
 ///
 /// 💡 [`succeed`](#succeed) and [`return`](#return) are names for the same thing.
 /// We suggest using `succeed` in a pipeline with `nibble.then`, and `return`
-/// unqalified when using `do` with Gleam's `use` syntax.
+/// unqualified when using `do` with Gleam's `use` syntax.
 ///
 pub fn succeed(value: a) -> Parser(a, tok, ctx) {
   return(value)

@@ -65,7 +65,7 @@
 //// ```
 ////
 //// Here we have some whitespace that would be matched by `lexer.whitespace`, by
-//// we passed that matcher to the [`lexer.ignore`](#ignore) comabinator. The matcher
+//// we passed that matcher to the [`lexer.ignore`](#ignore) combinator. The matcher
 //// will still consume the input, but this time it will not produce a new token
 //// value:
 ////
@@ -249,7 +249,7 @@ pub fn map(matcher: Matcher(a, mode), f: fn(a) -> b) -> Matcher(b, mode) {
 }
 
 /// Take an existing matcher and transform it by applying a function to the value
-/// it producs. The function you provide can return a different [`Match`](#Match)
+/// it produces. The function you provide can return a different [`Match`](#Match)
 /// so you can, for example, take a matcher that `Keep`s a value and turn it into
 /// a matcher that `Drop`s the value instead. This is out [`ignore`](#ignore) works!
 ///
@@ -564,13 +564,14 @@ pub fn whitespace(token: a) -> Matcher(a, mode) {
   }
 }
 
+/// Match a line comment starting with the a given string. Keeps the leading whitespace.
 ///
 pub fn comment(start: String, to_value: fn(String) -> a) -> Matcher(a, mode) {
   let drop_length = string.length(start)
   use mode, lexeme, lookahead <- Matcher
 
   case string.starts_with(lexeme, start), lookahead {
-    True, "\n" ->
+    True, "\n" | True, "" ->
       lexeme
       |> string.drop_start(drop_length)
       |> to_value
